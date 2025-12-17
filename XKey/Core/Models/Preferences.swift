@@ -61,6 +61,24 @@ struct Preferences: Codable {
     var showDockIcon: Bool = false               // Show icon in Dock (menu bar always visible)
     var startAtLogin: Bool = false
     var menuBarIconStyle: MenuBarIconStyle = .x  // Icon style for menubar
+    
+    // Excluded apps - apps where Vietnamese input is disabled
+    var excludedApps: [ExcludedApp] = []
+}
+
+// MARK: - Excluded App Model
+
+struct ExcludedApp: Codable, Identifiable, Equatable {
+    var id: String { bundleIdentifier }
+    let bundleIdentifier: String
+    let appName: String
+    let appPath: String?
+    
+    init(bundleIdentifier: String, appName: String, appPath: String? = nil) {
+        self.bundleIdentifier = bundleIdentifier
+        self.appName = appName
+        self.appPath = appPath
+    }
 }
 
 struct Hotkey: Codable, Equatable {

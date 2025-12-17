@@ -95,6 +95,9 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         didSet { updateEngineSettings() }
     }
     
+    // Excluded apps
+    @Published var excludedApps: [ExcludedApp] = []
+    
     // Undo typing key (single key, no modifiers)
     var undoTypingKeyCode: UInt16?
     
@@ -221,6 +224,12 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
     func shouldProcessEvent(_ event: CGEvent, type: CGEventType) -> Bool {
         debugLogCallback?("shouldProcessEvent: enabled=\(isVietnameseEnabled), macroInEnglish=\(macroInEnglishMode), macroEnabled=\(macroEnabled), type=\(type.rawValue)")
 
+        // Check if current app is in excluded list
+        if isCurrentAppExcluded() {
+            debugLogCallback?("  → Current app is EXCLUDED")
+            return false
+        }
+        
         // Check if we should process in English mode (for macro support)
         let shouldProcessInEnglishMode = !isVietnameseEnabled && macroEnabled && macroInEnglishMode
         
@@ -258,7 +267,12 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         if event.isCommandPressed {
             debugLogCallback?("  → Has Cmd modifier")
             engine.reset()
-            injector.markNewSession()  // Mark as new input session
+            // Cmd + Arrow keys move cursor, so mark as mid-sentence
+            // This prevents Forward Delete from deleting text on the right
+            let keyCode = event.keyCode
+            let cursorMovementKeys: [CGKeyCode] = [0x7B, 0x7C, 0x7D, 0x7E, 0x73, 0x77, 0x74, 0x79] // Arrow keys, Home, End, Page Up/Down
+            let isCursorMovement = cursorMovementKeys.contains(keyCode)
+            injector.markNewSession(cursorMoved: isCursorMovement)
             return false
         }
         
@@ -401,10 +415,14 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
             injector.resetFirstWord()  // Mark that we're no longer on first word
             injector.resetKeystrokeCount()  // Reset keystroke count for next word
             
-            // Reset mid-sentence flag on Enter/Return - user is starting a new line
-            if character == "\n" || character == "\r" {
-                injector.resetMidSentenceFlag()
-            }
+            // NOTE: Do NOT reset mid-sentence flag on Enter/Return
+            // When user presses Enter in the middle of text (e.g., line 2 of 3 lines),
+            // there's still text on the right side. If we reset isTypingMidSentence,
+            // Forward Delete will incorrectly delete that text when adding diacritics.
+            // The mid-sentence flag should only be reset when:
+            // - User clicks mouse (handled by resetWithCursorMoved)
+            // - User tabs to new field (handled above)
+            // - User starts typing in a completely new context
             
             return event
         }
@@ -594,6 +612,25 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         engine.reset()
         injector.markNewSession(cursorMoved: true)  // Mark that cursor was moved
         injector.clearMethodCache()  // Clear injection method cache
+    }
+    
+    // MARK: - Excluded Apps Check
+    
+    /// Check if the current frontmost app is in the excluded list
+    private func isCurrentAppExcluded() -> Bool {
+        guard !excludedApps.isEmpty else { return false }
+        
+        guard let frontmostApp = NSWorkspace.shared.frontmostApplication,
+              let bundleId = frontmostApp.bundleIdentifier else {
+            return false
+        }
+        
+        return excludedApps.contains { $0.bundleIdentifier == bundleId }
+    }
+    
+    /// Check if a specific bundle identifier is excluded
+    func isAppExcluded(bundleIdentifier: String) -> Bool {
+        return excludedApps.contains { $0.bundleIdentifier == bundleIdentifier }
     }
 }
 

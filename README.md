@@ -5,7 +5,7 @@
   
   **Bộ gõ tiếng Việt hiện đại cho macOS**
   
-  [![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)](https://github.com/xmannv/xkey/releases)
+  [![Version](https://img.shields.io/badge/version-1.0.6-blue.svg)](https://github.com/xmannv/xkey/releases)
   [![macOS](https://img.shields.io/badge/macOS-12.0+-green.svg)](https://www.apple.com/macos/)
   [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 </div>
@@ -193,7 +193,7 @@ Nếu muốn giữ XKey trong `/Applications` chung:
 ```bash
 # Clone repository
 git clone https://github.com/xmannv/xkey.git
-cd xkey/XKey
+cd xkey
 
 # Mở project với Xcode
 open XKey.xcodeproj

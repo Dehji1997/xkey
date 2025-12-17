@@ -20,6 +20,9 @@ enum InjectionMethod {
 }
 
 /// Injection delays in microseconds (backspace, wait, text)
+/// - backspace: Delay between each backspace keystroke (deleting old characters)
+/// - wait: Delay after all backspaces, before sending new text
+/// - text: Delay between each character when injecting Vietnamese text
 typealias InjectionDelays = (backspace: UInt32, wait: UInt32, text: UInt32)
 
 class CharacterInjector {
@@ -754,8 +757,8 @@ class CharacterInjector {
             debugCallback?("    → Method: slow (JetBrains IDE)")
             cachedMethod = .slow
             // Higher delays for JetBrains: 6ms backspace, 15ms wait, 6ms text
-            cachedDelays = (6000, 15000, 6000)
-            return (.slow, (6000, 15000, 6000))
+            cachedDelays = (12000, 30000, 12000)
+            return (.slow, (12000, 30000, 12000))
         }
         
         // Microsoft Office apps
@@ -777,9 +780,9 @@ class CharacterInjector {
         if terminals.contains(bundleId) {
             debugCallback?("    → Method: slow (Terminal)")
             cachedMethod = .slow
-            // High delays for terminal reliability: 12ms backspace, 30ms wait, 12ms text
-            cachedDelays = (12000, 30000, 12000)
-            return (.slow, (12000, 30000, 12000))
+            // High delays for terminal reliability: 40ms backspace, 80ms wait, 50ms text
+            cachedDelays = (40000, 80000, 50000)
+            return (.slow, (40000, 80000, 50000))
         }
         
         // Default: fast with safe delays

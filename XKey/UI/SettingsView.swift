@@ -14,6 +14,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case general = "Cơ bản"
     case quickTyping = "Gõ nhanh"
     case advanced = "Nâng cao"
+    case excludedApps = "Loại trừ"
     case macro = "Macro"
     case convertTool = "Chuyển đổi"
     case appearance = "Giao diện"
@@ -26,6 +27,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .general: return "gearshape"
         case .quickTyping: return "keyboard"
         case .advanced: return "slider.horizontal.3"
+        case .excludedApps: return "app.badge.fill"
         case .macro: return "text.badge.plus"
         case .convertTool: return "arrow.left.arrow.right"
         case .appearance: return "paintbrush"
@@ -69,6 +71,8 @@ struct SettingsView: View {
                     QuickTypingSettingsSection(viewModel: viewModel)
                 case .advanced:
                     AdvancedSettingsSection(viewModel: viewModel)
+                case .excludedApps:
+                    ExcludedAppsSettingsSection(viewModel: viewModel)
                 case .macro:
                     MacroSettingsSection(prefsViewModel: viewModel)
                 case .convertTool:
@@ -564,16 +568,12 @@ struct MacroSettingsSection: View {
                     VStack(alignment: .leading, spacing: 12) {
                         // Action buttons
                         HStack(spacing: 12) {
-                            Button {
-                                viewModel.importMacros()
-                            } label: {
+                            Button(action: viewModel.importMacros) {
                                 Label("Import", systemImage: "square.and.arrow.down")
                             }
                             .buttonStyle(.bordered)
                             
-                            Button {
-                                viewModel.exportMacros()
-                            } label: {
+                            Button(action: viewModel.exportMacros) {
                                 Label("Export", systemImage: "square.and.arrow.up")
                             }
                             .buttonStyle(.bordered)

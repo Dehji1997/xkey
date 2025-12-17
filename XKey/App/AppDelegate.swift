@@ -321,6 +321,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Apply smart switch
         keyboardHandler?.smartSwitchEnabled = preferences.smartSwitchEnabled
         
+        // Apply excluded apps
+        keyboardHandler?.excludedApps = preferences.excludedApps
+        
         // Apply debug mode (toggle debug window)
         toggleDebugWindow(enabled: preferences.debugModeEnabled)
         

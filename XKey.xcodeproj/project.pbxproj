@@ -38,6 +38,7 @@
 		A100000A /* CharacterInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000A /* CharacterInjector.swift */; };
 		A100000B /* KeyboardEventHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000B /* KeyboardEventHandler.swift */; };
 		CONVERTVM001 /* ConvertToolViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CONVERTVM002 /* ConvertToolViewModel.swift */; };
+		EXCLUDEDAPPS001 /* ExcludedAppsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EXCLUDEDAPPS002 /* ExcludedAppsView.swift */; };
 		DEBUGVIEW001 /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBUGVIEW002 /* DebugView.swift */; };
 		DEBUGVM001 /* DebugViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBUGVM002 /* DebugViewModel.swift */; };
 		E93062521966136C34EDEC22 /* VNEngineSmartSwitch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AAC14FFBBB2B10B6A983B1A /* VNEngineSmartSwitch.swift */; };
@@ -82,6 +83,7 @@
 		A3000002 /* XKey.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = XKey.entitlements; sourceTree = "<group>"; };
 		A7801294053CCB45DE7232D2 /* VNEngineSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VNEngineSettings.swift; sourceTree = "<group>"; };
 		CONVERTVM002 /* ConvertToolViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvertToolViewModel.swift; sourceTree = "<group>"; };
+		EXCLUDEDAPPS002 /* ExcludedAppsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExcludedAppsView.swift; sourceTree = "<group>"; };
 		DEBUGVIEW002 /* DebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugView.swift; sourceTree = "<group>"; };
 		DEBUGVM002 /* DebugViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugViewModel.swift; sourceTree = "<group>"; };
 		E5F6BDFF6F99DC1B577BA425 /* VNEngineAdvanced.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VNEngineAdvanced.swift; sourceTree = "<group>"; };
@@ -191,6 +193,7 @@
 				DEBUGVIEW002 /* DebugView.swift */,
 				MACROVM002 /* MacroManagementViewModel.swift */,
 				CONVERTVM002 /* ConvertToolViewModel.swift */,
+				EXCLUDEDAPPS002 /* ExcludedAppsView.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -330,6 +333,7 @@
 				DEBUGVIEW001 /* DebugView.swift in Sources */,
 				MACROVM001 /* MacroManagementViewModel.swift in Sources */,
 				CONVERTVM001 /* ConvertToolViewModel.swift in Sources */,
+				EXCLUDEDAPPS001 /* ExcludedAppsView.swift in Sources */,
 				UPDATECHECKER001 /* UpdateChecker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -128,56 +128,86 @@ class MacroManagementViewModel: ObservableObject {
     // MARK: - Import/Export
     
     func importMacros() {
-        guard let manager = getMacroManager() else {
-            showAlert(title: "Lỗi", message: "Không thể kết nối với MacroManager")
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.importMacros() }
             return
         }
         
+        NSApp.activate(ignoringOtherApps: true)
+        
         let panel = NSOpenPanel()
         panel.title = "Import Macros"
-        panel.message = "Chọn file macro để import"
+        panel.message = "Chọn file macro để import (định dạng: text=content mỗi dòng)"
         panel.allowedContentTypes = [.text, .plainText]
         panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.level = .modalPanel
         
-        if panel.runModal() == .OK, let url = panel.url {
-            if manager.loadFromFile(path: url.path, append: true) {
-                // Reload from manager
-                let allMacros = manager.getAllMacros()
-                macros.removeAll()
-                for (_, text, content) in allMacros {
-                    let macro = MacroItem(text: text, content: content)
-                    if !macros.contains(where: { $0.text == macro.text }) {
-                        macros.append(macro)
-                    }
-                }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        
+        do {
+            let content = try String(contentsOf: url, encoding: .utf8)
+            var importedCount = 0
+            
+            for line in content.components(separatedBy: .newlines) {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.isEmpty, !trimmed.hasPrefix("#"),
+                      let equalIndex = trimmed.firstIndex(of: "=") else { continue }
+                
+                let text = String(trimmed[..<equalIndex]).trimmingCharacters(in: .whitespaces)
+                let macroContent = String(trimmed[trimmed.index(after: equalIndex)...]).trimmingCharacters(in: .whitespaces)
+                
+                guard !text.isEmpty, !macroContent.isEmpty,
+                      !macros.contains(where: { $0.text == text }) else { continue }
+                
+                macros.append(MacroItem(text: text, content: macroContent))
+                importedCount += 1
+            }
+            
+            if importedCount > 0 {
                 macros.sort { $0.text < $1.text }
                 saveMacros()
-                
-                showAlert(title: "Thành công", message: "Đã import \(allMacros.count) macro")
+                NotificationCenter.default.post(name: .macrosDidChange, object: nil)
+                showAlert(title: "Thành công", message: "Đã import \(importedCount) macro mới")
             } else {
-                showAlert(title: "Lỗi", message: "Không thể đọc file macro")
+                showAlert(title: "Thông báo", message: "Không có macro mới để import")
             }
+        } catch {
+            showAlert(title: "Lỗi", message: "Không thể đọc file: \(error.localizedDescription)")
         }
     }
     
     func exportMacros() {
-        guard let manager = getMacroManager() else {
-            showAlert(title: "Lỗi", message: "Không thể kết nối với MacroManager")
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.exportMacros() }
             return
         }
+        
+        guard !macros.isEmpty else {
+            showAlert(title: "Thông báo", message: "Không có macro nào để export")
+            return
+        }
+        
+        NSApp.activate(ignoringOtherApps: true)
         
         let panel = NSSavePanel()
         panel.title = "Export Macros"
         panel.message = "Lưu file macro"
         panel.nameFieldStringValue = "macros.txt"
         panel.allowedContentTypes = [.text, .plainText]
+        panel.canCreateDirectories = true
+        panel.level = .modalPanel
         
-        if panel.runModal() == .OK, let url = panel.url {
-            if manager.saveToFile(path: url.path) {
-                showAlert(title: "Thành công", message: "Đã export \(macros.count) macro")
-            } else {
-                showAlert(title: "Lỗi", message: "Không thể lưu file macro")
-            }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        
+        do {
+            var lines = ["# XKey Macros", "# Format: shortcut=replacement", ""]
+            lines.append(contentsOf: macros.map { "\($0.text)=\($0.content)" })
+            try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+            showAlert(title: "Thành công", message: "Đã export \(macros.count) macro")
+        } catch {
+            showAlert(title: "Lỗi", message: "Không thể lưu file: \(error.localizedDescription)")
         }
     }
     
