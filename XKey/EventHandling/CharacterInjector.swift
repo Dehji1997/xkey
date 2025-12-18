@@ -943,7 +943,15 @@ class CharacterInjector {
         }
         
         // Microsoft Office apps
+        // Excel uses AXTextArea, Word may use AXTextField
         if bundleId == "com.microsoft.Excel" || bundleId == "com.microsoft.Word" {
+            // Use backspace method for Excel cells (AXTextArea has issues with selection)
+            if role == "AXTextArea" {
+                debugCallback?("    → Method: fast (Microsoft Excel cell)")
+                cachedMethod = .fast
+                cachedDelays = (2000, 5000, 2000)
+                return (.fast, (2000, 5000, 2000))
+            }
             debugCallback?("    → Method: selection (Microsoft Office)")
             cachedMethod = .selection
             cachedDelays = (1000, 3000, 2000)
