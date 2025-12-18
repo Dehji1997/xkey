@@ -134,7 +134,7 @@ class VNEngine {
         hookState.macroKey = savedMacroKey
         
         let isCaps = isUppercase
-        
+
         // Check if number key with shift or has other modifier
         if (vietnameseData.isNumberKey(keyCode) && isUppercase) || hasOtherModifier || isWordBreak(keyCode: keyCode) {
             handleWordBreak(keyCode: keyCode, character: character, isCaps: isCaps)
@@ -168,20 +168,43 @@ class VNEngine {
     private func isMacroBreakCode(keyCode: UInt16) -> Bool {
         return vietnameseData.macroBreakCode.contains(keyCode)
     }
-    
+
+    private func isMacroBreakCode(keyCode: UInt16, isCaps: Bool) -> Bool {
+        // Check if it's in the standard macro break code list
+        if vietnameseData.macroBreakCode.contains(keyCode) {
+            return true
+        }
+
+        // Special case: number keys with Shift produce special characters (@, !, #, etc.)
+        // and should also trigger macro replacement
+        if isCaps && vietnameseData.isNumberKey(keyCode) {
+            return true
+        }
+
+        return false
+    }
+
     private func handleWordBreak(keyCode: UInt16, character: Character, isCaps: Bool) {
         hookState.code = UInt8(vDoNothing)
         hookState.backspaceCount = 0
         hookState.newCharCount = 0
         hookState.extCode = 1 // word break
-        
-        // Check macro
-        if shouldUseMacro() && isMacroBreakCode(keyCode: keyCode) && !hasHandledMacro {
-            _ = findAndReplaceMacro()
+
+        // For special characters that can be part of a macro (like @, !, #, ~),
+        // just add them to macroKey WITHOUT triggering macro replacement.
+        // Macro replacement should only happen when user presses SPACE.
+        let isCharKeyCode = vietnameseData.charKeyCode.contains(keyCode)
+        if shouldUseMacro() && isMacroBreakCode(keyCode: keyCode, isCaps: isCaps) && !hasHandledMacro {
+            if isCharKeyCode {
+                // Add character to macroKey for building macros like "you@" or "!bb"
+                hookState.macroKey.append(UInt32(keyCode) | (isCaps ? VNEngine.CAPS_MASK : 0))
+            }
+            // NOTE: Do NOT call findAndReplaceMacro() here
+            // Macro replacement only happens on SPACE (in processWordBreak)
         }
         
         // Check quick consonant
-        if (vQuickStartConsonant == 1 || vQuickEndConsonant == 1) && !tempDisableKey && isMacroBreakCode(keyCode: keyCode) {
+        if (vQuickStartConsonant == 1 || vQuickEndConsonant == 1) && !tempDisableKey && isMacroBreakCode(keyCode: keyCode, isCaps: isCaps) {
             checkQuickConsonant()
         }
         
@@ -195,8 +218,7 @@ class VNEngine {
             }
         }
         
-        // Check if char key code
-        let isCharKeyCode = vietnameseData.charKeyCode.contains(keyCode)
+        // Handle special char saving
         if !isCharKeyCode {
             specialChar.removeAll()
             typingStates.removeAll()
@@ -211,21 +233,22 @@ class VNEngine {
             hookState.extCode = 3 // normal word
         }
         
+        // Handle session management
+        // For special characters (charKeyCode), preserve macroKey to allow building macros
         if hookState.code == UInt8(vDoNothing) {
-            startNewSession()
+            if isCharKeyCode {
+                // Save and restore macroKey around startNewSession
+                let savedMacroKey = hookState.macroKey
+                startNewSession()
+                hookState.macroKey = savedMacroKey
+            } else {
+                // For non-char word breaks, clear macroKey
+                startNewSession()
+            }
             vCheckSpelling = useSpellCheckingBefore ? 1 : 0
             willTempOffEngine = false
         } else if hookState.code == UInt8(vReplaceMacro) || hasHandleQuickConsonant {
             index = 0
-        }
-        
-        // Insert key for macro
-        if vUseMacro == 1 {
-            if isCharKeyCode {
-                hookState.macroKey.append(UInt32(keyCode) | (isCaps ? VNEngine.CAPS_MASK : 0))
-            } else {
-                hookState.macroKey.removeAll()
-            }
         }
         
         // Upper case first char
@@ -355,27 +378,35 @@ class VNEngine {
     // MARK: - Normal Key Handling
     
     private func handleNormalKey(keyCode: UInt16, character: Character, isCaps: Bool) {
+
         if willTempOffEngine {
             hookState.code = UInt8(vDoNothing)
             hookState.extCode = 3
             return
         }
-        
+
         if spaceCount > 0 {
+            // Save macroKey before reset - it may contain special chars like "!" for macro matching
+            let savedMacroKey = hookState.macroKey
+            
             hookState.backspaceCount = 0
             hookState.newCharCount = 0
             hookState.extCode = 0
             startNewSession()
             saveWord(keyCode: VietnameseData.KEY_SPACE, count: spaceCount)
             spaceCount = 0
+            
+            // Restore macroKey if it had content (allows macros like "!bb" to work)
+            if !savedMacroKey.isEmpty {
+                hookState.macroKey = savedMacroKey
+            }
         } else if !specialChar.isEmpty {
             saveSpecialChar()
         }
-        
+
         insertState(keyCode: keyCode, isCaps: isCaps)
         
         let isSpecial = isSpecialKey(keyCode: keyCode)
-        logCallback?("handleNormalKey: keyCode=\(keyCode), isSpecial=\(isSpecial), tempDisableKey=\(tempDisableKey)")
         
         if !isSpecial || tempDisableKey {
             if vQuickTelex == 1 && isQuickTelexKey(keyCode: keyCode) {
@@ -387,13 +418,11 @@ class VNEngine {
                 hookState.newCharCount = 0
                 hookState.extCode = 3
                 insertKey(keyCode: keyCode, isCaps: isCaps)
-                logCallback?("Normal key inserted: keyCode=\(keyCode), index=\(index), buffer=\(getCurrentWord())")
             }
         } else {
             hookState.code = UInt8(vDoNothing)
             hookState.extCode = 3
             handleMainKey(keyCode: keyCode, isCaps: isCaps)
-            logCallback?("Special key handled: keyCode=\(keyCode), index=\(index), buffer=\(getCurrentWord())")
         }
         
         // Always check for vowel auto-fix (ưo → ươ) regardless of vFreeMark
@@ -407,7 +436,6 @@ class VNEngine {
         // Vietnamese spelling rule: with end consonant, tone must be on the vowel closest to it
         // Example: "hoạt" - tone on 'a', not 'o'; "hiện" - tone on 'ê', not 'i'
         // This rule applies regardless of vFreeMark setting
-        logCallback?("checkMarkPosition check: vFreeMark=\(vFreeMark), isKeyD=\(isKeyD(keyCode: keyCode, inputType: vInputType))")
         if !isKeyD(keyCode: keyCode, inputType: vInputType) {
             // Check if this key is an end consonant
             let isEndConsonant = vietnameseData.isConsonant(keyCode) && index > 1
@@ -421,8 +449,6 @@ class VNEngine {
                 } else {
                     checkMarkPosition(deltaBackSpace: 0)
                 }
-            } else {
-                logCallback?("  → Skipping checkMarkPosition (vFreeMark=1, not end consonant)")
             }
         }
         
@@ -433,6 +459,7 @@ class VNEngine {
         
         // Insert or replace key for macro
         if vUseMacro == 1 {
+            let macroKeyBefore = hookState.macroKey
             if hookState.code == UInt8(vDoNothing) {
                 hookState.macroKey.append(UInt32(keyCode) | (isCaps ? VNEngine.CAPS_MASK : 0))
             } else if hookState.code == UInt8(vWillProcess) || hookState.code == UInt8(vRestore) {
@@ -2288,6 +2315,8 @@ class VNEngine {
         case VietnameseData.KEY_8: return "8"
         case VietnameseData.KEY_9: return "9"
         case VietnameseData.KEY_SPACE: return " "
+        case VietnameseData.KEY_LEFT_BRACKET: return "["
+        case VietnameseData.KEY_RIGHT_BRACKET: return "]"
         default: return nil
         }
     }
@@ -2489,9 +2518,16 @@ extension VNEngine {
     /// Process word break (space, punctuation, etc.)
     /// Returns ProcessResult with macro replacement if found
     func processWordBreak(character: Character) -> ProcessResult {
-        // Check macro before resetting
-        if shouldUseMacro() && !hasHandledMacro {
-            if findAndReplaceMacro() {
+        // Only trigger macro on SPACE - not on other word break characters
+        // This prevents macros like "you@" from triggering immediately when typing "@"
+        // User needs to press space to trigger macro replacement
+        let isSpace = (character == " ")
+        
+        // Check macro before resetting - ONLY for space
+        if isSpace && shouldUseMacro() && !hasHandledMacro {
+            let macroFound = findAndReplaceMacro()
+
+            if macroFound {
                 let result = convertHookStateToResult(hookState, currentKeyCode: nil, currentCharacter: character, isUppercase: false)
                 // Reset after macro replacement
                 reset()
@@ -2499,24 +2535,54 @@ extension VNEngine {
             }
         }
         
+        // For non-space word break characters, add them to macroKey for building macros
+        // This allows macros like "you@" or "!bb" to be built character by character
+        if !isSpace && shouldUseMacro() {
+            let wordBreakCharToKeyCode: [Character: UInt16] = [
+                "!": 0x12, "@": 0x13, "#": 0x14, "$": 0x15, "%": 0x17,
+                "^": 0x16, "&": 0x1A, "*": 0x1C, "(": 0x19, ")": 0x1D,
+                "~": 0x32, "`": 0x32, "-": 0x1B, "_": 0x1B, "=": 0x18, "+": 0x18,
+                "[": 0x21, "{": 0x21, "]": 0x1E, "}": 0x1E,
+                "\\": 0x2A, "|": 0x2A, ";": 0x29, ":": 0x29,
+                "'": 0x27, "\"": 0x27, ",": 0x2B, "<": 0x2B,
+                ".": 0x2F, ">": 0x2F, "/": 0x2C, "?": 0x2C
+            ]
+            
+            if let keyCode = wordBreakCharToKeyCode[character], vietnameseData.charKeyCode.contains(keyCode) {
+                // Check if it's a shifted special character
+                let isShiftedChar = ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "~", "_", "+", "{", "}", "|", ":", "\"", "<", ">", "?"].contains(character)
+                hookState.macroKey.append(UInt32(keyCode) | (isShiftedChar ? VNEngine.CAPS_MASK : 0))
+            }
+        }
+        
         // IMPORTANT: Save current word to typingStates BEFORE resetting
         // This enables "free mark" feature - user can add marks to previous word after backspace
         // OpenKey behavior: saveWord() is called before startNewSession()
-        
+
+        // Save macroKey before reset if word break char is a special char
+        // This preserves special chars like "!" so "!bb" macro can work
+        let savedMacroKey = hookState.macroKey
+
         // If we already have spaces saved, save them first
         if spaceCount > 0 {
             saveWord(keyCode: VietnameseData.KEY_SPACE, count: spaceCount)
             spaceCount = 0
         }
-        
+
         // Save current word
         saveWord()
-        
+
         // Increment space count for the current space
         spaceCount = 1
-        
+
         // Start new session but DON'T clear typingStates
         startNewSession()
+
+        // Restore macroKey if it had a special character
+        // This allows macros like "!bb" where "!" starts the macro
+        if !savedMacroKey.isEmpty {
+            hookState.macroKey = savedMacroKey
+        }
         
         // Reset spell checking to original setting
         vCheckSpelling = useSpellCheckingBefore ? 1 : 0

@@ -533,14 +533,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             queue: .main
         ) { [weak self] notification in
             guard let self = self else { return }
-            
+
             // Reset keyboard handler engine when switching apps
-            self.keyboardHandler?.reset()
-            
+            // Use resetForAppSwitch() which assumes typing mid-sentence to prevent
+            // Forward Delete from deleting text on the right of cursor
+            self.keyboardHandler?.resetForAppSwitch()
+
             // Handle Smart Switch - auto switch language per app
             self.handleSmartSwitch(notification: notification)
-            
-            self.debugWindowController?.logEvent("🔄 App switched - engine reset")
+
+            self.debugWindowController?.logEvent("🔄 App switched - engine reset, mid-sentence mode")
         }
 
         debugWindowController?.logEvent("  ✅ App switch observer registered")

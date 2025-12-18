@@ -93,7 +93,8 @@ class VietnameseData {
     
     let macroBreakCode: [UInt16] = [
         KEY_RETURN, KEY_COMMA, KEY_DOT, KEY_SLASH, KEY_SEMICOLON, KEY_QUOTE,
-        KEY_BACK_SLASH, KEY_MINUS, KEY_EQUALS
+        KEY_BACK_SLASH, KEY_MINUS, KEY_EQUALS, KEY_BACKQUOTE,
+        KEY_LEFT_BRACKET, KEY_RIGHT_BRACKET
     ]
     
     let charKeyCode: [UInt16] = [

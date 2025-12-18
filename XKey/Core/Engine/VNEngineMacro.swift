@@ -36,7 +36,11 @@ extension VNEngine {
         guard shouldUseMacro() else { return false }
         guard !hookState.macroKey.isEmpty else { return false }
         guard !hasHandledMacro else { return false }
-        
+
+        // Debug: Show macro key being searched
+        let macroKeyStr = hookState.macroKey.map { String(format: "0x%X", $0) }.joined(separator: ", ")
+        logCallback?("🔍 findAndReplaceMacro: searching for macroKey=[\(macroKeyStr)] (count=\(hookState.macroKey.count))")
+
         // Try to find macro
         if let macroContent = macroManager.findMacro(key: hookState.macroKey) {
             // Found macro - prepare replacement

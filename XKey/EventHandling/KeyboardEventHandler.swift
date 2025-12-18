@@ -310,12 +310,16 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         }
 
         let keyCode = event.keyCode
-        
+
         // Determine uppercase by checking the ACTUAL character (with Shift/Caps Lock applied)
-        // This is more reliable than checking event flags
+        // For letters, use character.isUppercase
+        // For special characters (like @, #, !), check if Shift modifier is present
         let actualCharacters = event.characters ?? ""
         let actualCharacter = actualCharacters.first ?? character
-        let isUppercase = actualCharacter.isUppercase
+        let hasShiftModifier = event.flags.contains(.maskShift)
+
+        // If character is a letter, use isUppercase; otherwise use Shift flag
+        let isUppercase = actualCharacter.isLetter ? actualCharacter.isUppercase : hasShiftModifier
 
         debugLogCallback?("KEY: '\(character)' code=\(keyCode)")
 
@@ -607,7 +611,16 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         injector.markNewSession(cursorMoved: true)  // Mark that cursor was moved
         injector.clearMethodCache()  // Clear injection method cache
     }
-    
+
+    /// Reset engine when app switches
+    /// Assumes user will likely click into middle of text, so enables mid-sentence mode
+    /// This prevents Forward Delete from deleting text on the right of cursor
+    func resetForAppSwitch() {
+        engine.reset()
+        injector.markNewSession(cursorMoved: true)  // Assume typing mid-sentence after app switch
+        injector.clearMethodCache()
+    }
+
     // MARK: - Excluded Apps Check
     
     /// Check if the current frontmost app is in the excluded list

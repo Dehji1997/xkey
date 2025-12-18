@@ -79,9 +79,23 @@ class MacroManager {
     func findMacro(key: [UInt32]) -> [UInt32]? {
         // Convert key to character codes
         let searchKey = key.map { getCharacterCode($0) }
-        
+
+        // Debug logging
+        let keyStr = key.map { String(format: "0x%X", $0) }.joined(separator: ", ")
+        let searchKeyStr = searchKey.map { String(format: "0x%X", $0) }.joined(separator: ", ")
+        logCallback?("🔍 MacroManager.findMacro: input key=[\(keyStr)]")
+        logCallback?("🔍 MacroManager.findMacro: searchKey=[\(searchKeyStr)]")
+        logCallback?("🔍 MacroManager.findMacro: macroMap has \(macroMap.count) macros")
+
+        // Debug: show all stored macros
+        for (storedKey, macro) in macroMap {
+            let storedKeyStr = storedKey.map { String(format: "0x%X", $0) }.joined(separator: ", ")
+            logCallback?("🔍   - Stored macro: key=[\(storedKeyStr)] text='\(macro.macroText)'")
+        }
+
         // Try exact match first
         if let macro = macroMap[searchKey] {
+            logCallback?("🔍 MacroManager.findMacro: FOUND exact match! text='\(macro.macroText)', content='\(macro.macroContent)'")
             return macro.macroContentCode
         }
         
@@ -256,11 +270,55 @@ class MacroManager {
             0x20: "u", 0x09: "v", 0x0D: "w", 0x07: "x", 0x10: "y",
             0x06: "z",
             0x12: "1", 0x13: "2", 0x14: "3", 0x15: "4", 0x17: "5",
-            0x16: "6", 0x1A: "7", 0x1C: "8", 0x19: "9", 0x1D: "0"
+            0x16: "6", 0x1A: "7", 0x1C: "8", 0x19: "9", 0x1D: "0",
+            // Special characters
+            0x32: "`",  // KEY_BACKQUOTE (tilde ~ with Shift)
+            0x1B: "-",  // KEY_MINUS
+            0x18: "=",  // KEY_EQUALS
+            0x21: "[",  // KEY_LEFT_BRACKET
+            0x1E: "]",  // KEY_RIGHT_BRACKET
+            0x2A: "\\", // KEY_BACK_SLASH
+            0x29: ";",  // KEY_SEMICOLON
+            0x27: "'",  // KEY_QUOTE
+            0x2B: ",",  // KEY_COMMA
+            0x2F: ".",  // KEY_DOT
+            0x2C: "/"   // KEY_SLASH
         ]
         
         if let char = keyCodeToChar[keyCode] {
-            let charStr = isCaps ? String(char).uppercased() : String(char)
+            // Handle special characters with Shift modifier
+            let charStr: String
+            if isCaps {
+                // Map shifted special characters
+                switch keyCode {
+                case 0x32: charStr = "~"  // Shift + ` → ~
+                case 0x12: charStr = "!"  // Shift + 1 → !
+                case 0x13: charStr = "@"  // Shift + 2 → @
+                case 0x14: charStr = "#"  // Shift + 3 → #
+                case 0x15: charStr = "$"  // Shift + 4 → $
+                case 0x17: charStr = "%"  // Shift + 5 → %
+                case 0x16: charStr = "^"  // Shift + 6 → ^
+                case 0x1A: charStr = "&"  // Shift + 7 → &
+                case 0x1C: charStr = "*"  // Shift + 8 → *
+                case 0x19: charStr = "("  // Shift + 9 → (
+                case 0x1D: charStr = ")"  // Shift + 0 → )
+                case 0x1B: charStr = "_"  // Shift + - → _
+                case 0x18: charStr = "+"  // Shift + = → +
+                case 0x21: charStr = "{"  // Shift + [ → {
+                case 0x1E: charStr = "}"  // Shift + ] → }
+                case 0x2A: charStr = "|"  // Shift + \ → |
+                case 0x29: charStr = ":"  // Shift + ; → :
+                case 0x27: charStr = "\"" // Shift + ' → "
+                case 0x2B: charStr = "<"  // Shift + , → <
+                case 0x2F: charStr = ">"  // Shift + . → >
+                case 0x2C: charStr = "?"  // Shift + / → ?
+                default:
+                    charStr = String(char).uppercased()
+                }
+            } else {
+                charStr = String(char)
+            }
+
             if let scalar = charStr.unicodeScalars.first {
                 return UInt32(scalar.value)
             }
