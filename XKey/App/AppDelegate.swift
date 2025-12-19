@@ -29,6 +29,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var mouseClickMonitor: Any?
     private var permissionAlertShown = false
     private var permissionCheckTimer: Timer?
+    private var inputSourceManager: InputSourceManager?
 
     // MARK: - Initialization
 
@@ -84,6 +85,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Setup mouse click monitor
         setupMouseClickMonitor()
+
+        // Setup input source manager
+        setupInputSourceManager()
 
         debugWindowController?.updateStatus("XKey started successfully")
         debugWindowController?.logEvent("✅ XKey started successfully")
@@ -607,8 +611,55 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.keyboardHandler?.resetWithCursorMoved()
             self?.debugWindowController?.logEvent("🖱️ Mouse click - engine reset, mid-sentence mode")
         }
-        
+
         debugWindowController?.logEvent("  ✅ Mouse click monitor registered")
+    }
+
+    private func setupInputSourceManager() {
+        inputSourceManager = InputSourceManager()
+
+        // Connect debug logging
+        inputSourceManager?.debugLogCallback = { [weak self] message in
+            self?.debugWindowController?.logEvent(message)
+        }
+
+        // Handle input source changes
+        inputSourceManager?.onInputSourceChanged = { [weak self] source, shouldEnable in
+            self?.handleInputSourceChange(source: source, shouldEnable: shouldEnable)
+        }
+
+        debugWindowController?.logEvent("  ✅ Input Source Manager initialized")
+
+        // IMPORTANT: Check current input source on startup and apply config
+        if let currentSource = InputSourceManager.getCurrentInputSource() {
+            let shouldEnable = inputSourceManager?.isEnabled(for: currentSource.id) ?? true
+            debugWindowController?.logEvent("🌐 Initial Input Source: \(currentSource.displayName)")
+            debugWindowController?.logEvent("   Should enable XKey: \(shouldEnable)")
+            handleInputSourceChange(source: currentSource, shouldEnable: shouldEnable)
+        }
+    }
+
+    /// Handle input source changes - apply enable/disable logic
+    private func handleInputSourceChange(source: InputSourceInfo, shouldEnable: Bool) {
+        // Get current state
+        let currentlyEnabled = self.statusBarManager?.viewModel.isVietnameseEnabled ?? false
+
+        // Auto enable/disable Vietnamese mode based on configuration
+        if shouldEnable {
+            // Enable Vietnamese mode
+            if !currentlyEnabled {
+                self.statusBarManager?.viewModel.isVietnameseEnabled = true
+                self.keyboardHandler?.setVietnamese(true)
+                self.debugWindowController?.logEvent("✅ Input Source '\(source.displayName)' → Auto-enabled")
+            }
+        } else {
+            // Disable Vietnamese mode
+            if currentlyEnabled {
+                self.statusBarManager?.viewModel.isVietnameseEnabled = false
+                self.keyboardHandler?.setVietnamese(false)
+                self.debugWindowController?.logEvent("⏹️ Input Source '\(source.displayName)' → Auto-disabled")
+            }
+        }
     }
 }
 

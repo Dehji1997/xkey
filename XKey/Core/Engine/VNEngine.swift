@@ -1928,11 +1928,16 @@ class VNEngine {
         
         // Rule for "uy" in old style: mark on 'u' (úy)
         // Old style: túy, húy, qúy
+        // BUT: If there's an ending consonant (like "huynh"), mark should be on 'y' (huỳnh)
         if vowelCount == 2 {
             let v1 = chr(vowelStartIndex)
             let v2 = chr(vowelStartIndex + 1)
-            if v1 == VietnameseData.KEY_U && v2 == VietnameseData.KEY_Y {
-                vowelWillSetMark = vowelStartIndex  // Đặt dấu vào 'u' cho kiểu cũ
+            let hasEndConsonant = vowelEndIndex + 1 < Int(index) &&
+                                  vietnameseData.isConsonant(chr(vowelEndIndex + 1)) &&
+                                  canHasEndConsonant()
+
+            if v1 == VietnameseData.KEY_U && v2 == VietnameseData.KEY_Y && !hasEndConsonant {
+                vowelWillSetMark = vowelStartIndex  // Đặt dấu vào 'u' cho kiểu cũ (chỉ khi KHÔNG có phụ âm cuối)
                 hookState.backspaceCount = UInt8(Int(index) - vowelWillSetMark)
             }
         }

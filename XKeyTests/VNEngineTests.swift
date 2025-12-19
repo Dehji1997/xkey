@@ -249,8 +249,90 @@ class VNEngineTests: XCTestCase {
         XCTAssertEqual(output, "khoảng", "Tone should be on 'a' in 'khoảng' (OpenKey modern orthography)")
     }
     
+    // MARK: - Tone Placement Tests (UY Pattern)
+
+    func testTonePlacement_HUYNH_ModernOrthography() {
+        engine.reset()
+        // Ensure modern orthography is enabled
+        engine.vUseModernOrthography = 1
+
+        // h
+        var result = engine.processKey(character: "h", keyCode: 0, isUppercase: false)
+        // u
+        result = engine.processKey(character: "u", keyCode: 0, isUppercase: false)
+        // y
+        result = engine.processKey(character: "y", keyCode: 0, isUppercase: false)
+        // n
+        result = engine.processKey(character: "n", keyCode: 0, isUppercase: false)
+        // h
+        result = engine.processKey(character: "h", keyCode: 0, isUppercase: false)
+        // f (grave tone - should go on 'y' in modern orthography)
+        result = engine.processKey(character: "f", keyCode: 0, isUppercase: false)
+
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "huỳnh", "Tone should be on 'y' in 'huỳnh' (modern orthography)")
+    }
+
+    func testTonePlacement_HUYNH_OldOrthography() {
+        engine.reset()
+        // Enable old orthography
+        engine.vUseModernOrthography = 0
+
+        // h
+        var result = engine.processKey(character: "h", keyCode: 0, isUppercase: false)
+        // u
+        result = engine.processKey(character: "u", keyCode: 0, isUppercase: false)
+        // y
+        result = engine.processKey(character: "y", keyCode: 0, isUppercase: false)
+        // n
+        result = engine.processKey(character: "n", keyCode: 0, isUppercase: false)
+        // h
+        result = engine.processKey(character: "h", keyCode: 0, isUppercase: false)
+        // f (grave tone - should STILL go on 'y' because of ending consonant "nh")
+        result = engine.processKey(character: "f", keyCode: 0, isUppercase: false)
+
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "huỳnh", "Tone should be on 'y' in 'huỳnh' even in old orthography (has ending consonant)")
+    }
+
+    func testTonePlacement_TUY_OldOrthography() {
+        engine.reset()
+        // Enable old orthography
+        engine.vUseModernOrthography = 0
+
+        // t
+        var result = engine.processKey(character: "t", keyCode: 0, isUppercase: false)
+        // u
+        result = engine.processKey(character: "u", keyCode: 0, isUppercase: false)
+        // y
+        result = engine.processKey(character: "y", keyCode: 0, isUppercase: false)
+        // s (acute tone - should go on 'u' in old orthography when NO ending consonant)
+        result = engine.processKey(character: "s", keyCode: 0, isUppercase: false)
+
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "túy", "Tone should be on 'u' in 'túy' (old orthography, no ending consonant)")
+    }
+
+    func testTonePlacement_TUY_ModernOrthography() {
+        engine.reset()
+        // Ensure modern orthography is enabled
+        engine.vUseModernOrthography = 1
+
+        // t
+        var result = engine.processKey(character: "t", keyCode: 0, isUppercase: false)
+        // u
+        result = engine.processKey(character: "u", keyCode: 0, isUppercase: false)
+        // y
+        result = engine.processKey(character: "y", keyCode: 0, isUppercase: false)
+        // s (acute tone - should go on 'y' in modern orthography)
+        result = engine.processKey(character: "s", keyCode: 0, isUppercase: false)
+
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "tuý", "Tone should be on 'y' in 'tuý' (modern orthography)")
+    }
+
     // MARK: - Tone Placement Tests (3 Vowels)
-    
+
     func testTonePlacement_UYEN_ThreeVowels() {
         engine.reset()
         

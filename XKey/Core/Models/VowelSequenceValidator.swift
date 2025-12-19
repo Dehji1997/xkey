@@ -317,8 +317,10 @@ struct VowelSequenceValidator {
                 }
                 
                 // Special case: Modern Style for uy - ALWAYS tone on 'y'
-                // Modern style: tuý, huý, quý (tone on 'y')
-                // Old style: túy, húy, qúy (tone on 'u')
+                // Modern style: tuý, huỳnh, quý (tone on 'y')
+                // Old style:
+                //   - Without ending consonant: túy, húy, qúy (tone on 'u')
+                //   - With ending consonant: huỳnh (tone on 'y')
                 if modernStyle && vowels == [.u, .y] {
                     return 1  // Tone on 'y'
                 }

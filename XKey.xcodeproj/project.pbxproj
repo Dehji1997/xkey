@@ -29,6 +29,7 @@
 		1029C48F2EF0504D0073ABCD /* DonationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1029C48E2EF0504D0073ABCD /* DonationView.swift */; };
 		106779A62ED41FD400FE0B24 /* StatusBarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106779A22ED41FD400FE0B24 /* StatusBarManager.swift */; };
 		106779A72ED41FD400FE0B24 /* DebugWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106779A12ED41FD400FE0B24 /* DebugWindowController.swift */; };
+		107602EE2EF4E3BA00ADC084 /* InputSourceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 107602EC2EF4E3BA00ADC084 /* InputSourceManager.swift */; };
 		1084A5462ED41EB200EA2D2A /* PreferencesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1084A5442ED41EB200EA2D2A /* PreferencesViewModel.swift */; };
 		1084A5472ED41EB200EA2D2A /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1084A5432ED41EB200EA2D2A /* PreferencesView.swift */; };
 		10A214992ED42DFA005B52BD /* HotkeyRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10A214972ED42DFA005B52BD /* HotkeyRecorderView.swift */; };
@@ -76,6 +77,7 @@
 		1029C48E2EF0504D0073ABCD /* DonationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DonationView.swift; sourceTree = "<group>"; };
 		106779A12ED41FD400FE0B24 /* DebugWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugWindowController.swift; sourceTree = "<group>"; };
 		106779A22ED41FD400FE0B24 /* StatusBarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarManager.swift; sourceTree = "<group>"; };
+		107602EC2EF4E3BA00ADC084 /* InputSourceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSourceManager.swift; sourceTree = "<group>"; };
 		1084A5432ED41EB200EA2D2A /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
 		1084A5442ED41EB200EA2D2A /* PreferencesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesViewModel.swift; sourceTree = "<group>"; };
 		10A214972ED42DFA005B52BD /* HotkeyRecorderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderView.swift; sourceTree = "<group>"; };
@@ -117,17 +119,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		100D2BAE2EF2B89600C26B87 /* XKeyIM */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = XKeyIM;
-			sourceTree = "<group>";
-		};
+		100D2BAE2EF2B89600C26B87 /* XKeyIM */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = XKeyIM; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -259,6 +251,7 @@
 		A5000009 /* Engine */ = {
 			isa = PBXGroup;
 			children = (
+				107602EC2EF4E3BA00ADC084 /* InputSourceManager.swift */,
 				10F26F0A2ED6CAF900B9FA1F /* ConvertTool.swift */,
 				10F26F0B2ED6CAF900B9FA1F /* MacroManager.swift */,
 				10F26F0C2ED6CAF900B9FA1F /* SmartSwitchManager.swift */,
@@ -426,6 +419,7 @@
 				7FBD214005ADB766CB3DF3B8 /* VNEngineMacro.swift in Sources */,
 				E93062521966136C34EDEC22 /* VNEngineSmartSwitch.swift in Sources */,
 				5A61FAA58A29AD3225DD649C /* SettingsView.swift in Sources */,
+				107602EE2EF4E3BA00ADC084 /* InputSourceManager.swift in Sources */,
 				5FEB1775ED6A86BD90EEE11F /* SettingsWindowController.swift in Sources */,
 				APPVERSION001 /* AppVersion.swift in Sources */,
 				LAUNCHATLOGIN001 /* LaunchAtLogin.swift in Sources */,

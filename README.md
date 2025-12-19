@@ -5,7 +5,7 @@
   
   **Bộ gõ tiếng Việt hiện đại cho macOS**
   
-  [![Version](https://img.shields.io/badge/version-1.1.5-blue.svg)](https://github.com/xmannv/xkey/releases)
+  [![Version](https://img.shields.io/badge/version-1.1.6-blue.svg)](https://github.com/xmannv/xkey/releases)
   [![macOS](https://img.shields.io/badge/macOS-12.0+-green.svg)](https://www.apple.com/macos/)
   [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 </div>
@@ -203,6 +203,24 @@ ENABLE_NOTARIZE=true ./build_release.sh
 - **Input Method Kit**: Native input method support
 - **Core Graphics**: Event handling
 - **Accessibility API**: Keyboard monitoring
+
+### Settings Persistence (Lưu trữ cài đặt)
+
+XKey sử dụng **Dual Storage System** để đảm bảo settings không bao giờ bị mất:
+
+1. **Primary Storage**: App Group UserDefaults (`group.com.codetay.inputmethod.XKey`)
+   - Chia sẻ settings giữa XKey và XKeyIM
+   - Cho phép cả 2 apps sync cài đặt real-time
+
+2. **Backup Storage**: UserDefaults.standard
+   - Tự động backup mỗi khi settings thay đổi
+   - Tự động restore nếu App Group container bị reset
+
+**Lợi ích**:
+- ✅ Settings được giữ nguyên khi update version mới
+- ✅ Tự động migrate từ phiên bản cũ
+- ✅ Backup an toàn, không lo mất cài đặt
+- ✅ Đồng bộ giữa XKey và XKeyIM
 
 ---
 

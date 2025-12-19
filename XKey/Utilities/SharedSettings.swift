@@ -61,6 +61,9 @@ enum SharedSettingsKey: String {
 
     // Excluded apps
     case excludedApps = "XKey.excludedApps"
+
+    // Input Source Management
+    case inputSourceConfig = "XKey.inputSourceConfig"
 }
 
 /// Manager for shared settings between XKey and XKeyIM
@@ -91,6 +94,9 @@ class SharedSettings {
 
         // Register default values
         registerDefaults()
+
+        // Restore settings from backup if App Group is empty
+        restoreFromBackupIfNeeded()
     }
 
     /// Register default values for settings
@@ -101,9 +107,75 @@ class SharedSettings {
 
         defaults.register(defaults: defaultValues)
     }
-    
+
+    /// Restore settings from UserDefaults.standard backup if App Group is empty
+    private func restoreFromBackupIfNeeded() {
+        // Only restore if we're using App Group
+        guard let shared = sharedDefaults else { return }
+
+        // Check if App Group has settings (check a key that should always exist)
+        let hasSettings = shared.object(forKey: SharedSettingsKey.inputMethod.rawValue) != nil
+
+        // If App Group is empty but standard defaults has backup, restore it
+        if !hasSettings {
+            let hasBackup = localDefaults.object(forKey: SharedSettingsKey.inputMethod.rawValue) != nil
+
+            if hasBackup {
+                print("📦 SharedSettings: Restoring from backup...")
+
+                // Restore all settings from standard defaults to App Group
+                for key in getAllSettingsKeys() {
+                    if let value = localDefaults.object(forKey: key) {
+                        shared.set(value, forKey: key)
+                    }
+                }
+
+                shared.synchronize()
+                print("✅ SharedSettings: Restored from backup successfully")
+            }
+        }
+    }
+
+    /// Get all settings keys for backup/restore
+    private func getAllSettingsKeys() -> [String] {
+        return [
+            SharedSettingsKey.toggleHotkeyCode.rawValue,
+            SharedSettingsKey.toggleHotkeyModifiers.rawValue,
+            SharedSettingsKey.toggleHotkeyIsModifierOnly.rawValue,
+            SharedSettingsKey.undoTypingEnabled.rawValue,
+            SharedSettingsKey.beepOnToggle.rawValue,
+            SharedSettingsKey.inputMethod.rawValue,
+            SharedSettingsKey.codeTable.rawValue,
+            SharedSettingsKey.modernStyle.rawValue,
+            SharedSettingsKey.spellCheckEnabled.rawValue,
+            SharedSettingsKey.fixAutocomplete.rawValue,
+            SharedSettingsKey.quickTelexEnabled.rawValue,
+            SharedSettingsKey.quickStartConsonantEnabled.rawValue,
+            SharedSettingsKey.quickEndConsonantEnabled.rawValue,
+            SharedSettingsKey.upperCaseFirstChar.rawValue,
+            SharedSettingsKey.restoreIfWrongSpelling.rawValue,
+            SharedSettingsKey.allowConsonantZFWJ.rawValue,
+            SharedSettingsKey.freeMarkEnabled.rawValue,
+            SharedSettingsKey.tempOffSpellingEnabled.rawValue,
+            SharedSettingsKey.tempOffEngineEnabled.rawValue,
+            SharedSettingsKey.macroEnabled.rawValue,
+            SharedSettingsKey.macroInEnglishMode.rawValue,
+            SharedSettingsKey.autoCapsMacro.rawValue,
+            SharedSettingsKey.macros.rawValue,
+            SharedSettingsKey.smartSwitchEnabled.rawValue,
+            SharedSettingsKey.debugModeEnabled.rawValue,
+            SharedSettingsKey.imkitEnabled.rawValue,
+            SharedSettingsKey.imkitUseMarkedText.rawValue,
+            SharedSettingsKey.showDockIcon.rawValue,
+            SharedSettingsKey.startAtLogin.rawValue,
+            SharedSettingsKey.menuBarIconStyle.rawValue,
+            SharedSettingsKey.excludedApps.rawValue,
+            SharedSettingsKey.inputSourceConfig.rawValue
+        ]
+    }
+
     // MARK: - Defaults Access
-    
+
     /// Get the appropriate UserDefaults (shared if available, local otherwise)
     private var defaults: UserDefaults {
         return sharedDefaults ?? localDefaults
@@ -325,13 +397,43 @@ class SharedSettings {
         defaults.set(data, forKey: SharedSettingsKey.excludedApps.rawValue)
     }
 
-    // MARK: - Sync
-    
-    /// Synchronize settings to disk
-    func synchronize() {
-        defaults.synchronize()
+    // MARK: - Input Source Management
+
+    func getInputSourceConfig() -> Data? {
+        return defaults.data(forKey: SharedSettingsKey.inputSourceConfig.rawValue)
     }
-    
+
+    func setInputSourceConfig(_ data: Data) {
+        defaults.set(data, forKey: SharedSettingsKey.inputSourceConfig.rawValue)
+    }
+
+    // MARK: - Sync
+
+    /// Synchronize settings to disk with dual backup
+    func synchronize() {
+        // Save to primary storage (App Group or local)
+        defaults.synchronize()
+
+        // CRITICAL: Also backup to UserDefaults.standard as failsafe
+        // This ensures settings persist even if App Group container changes
+        backupToStandardDefaults()
+    }
+
+    /// Backup all settings to UserDefaults.standard as failsafe
+    private func backupToStandardDefaults() {
+        // Only backup if we're using App Group (otherwise we'd create duplicate)
+        guard sharedDefaults != nil else { return }
+
+        // Backup all settings to standard UserDefaults
+        for key in getAllSettingsKeys() {
+            if let value = sharedDefaults?.object(forKey: key) {
+                localDefaults.set(value, forKey: key)
+            }
+        }
+
+        localDefaults.synchronize()
+    }
+
     /// Notify that settings have changed (for observers)
     private func notifySettingsChanged() {
         // Post notification for local observers
