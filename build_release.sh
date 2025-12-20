@@ -16,13 +16,48 @@ ENABLE_CODESIGN=${ENABLE_CODESIGN:-true}  # Set to false to disable code signing
 ENABLE_NOTARIZE=${ENABLE_NOTARIZE:-false}  # Set to true to enable notarization
 ENABLE_DMG=${ENABLE_DMG:-true}  # Set to false to skip DMG creation
 ENABLE_XKEYIM=${ENABLE_XKEYIM:-true}  # Set to false to skip XKeyIM build
+ENABLE_XKEYIM_BUNDLE=${ENABLE_XKEYIM_BUNDLE:-true}  # Set to false to skip bundling XKeyIM inside XKey.app
+
+# Smart defaults: If notarizing, assume it's a full release
+if [ "$ENABLE_NOTARIZE" = true ]; then
+    # Auto-enable Sparkle signing and appcast generation for notarized releases
+    ENABLE_SPARKLE_SIGN=${ENABLE_SPARKLE_SIGN:-true}
+    ENABLE_APPCAST=${ENABLE_APPCAST:-true}
+else
+    # For development builds, keep conservative defaults
+    ENABLE_SPARKLE_SIGN=${ENABLE_SPARKLE_SIGN:-true}
+    ENABLE_APPCAST=${ENABLE_APPCAST:-false}
+fi
+
 BUNDLE_ID="com.codetay.XKey"
 XKEYIM_BUNDLE_ID="com.codetay.inputmethod.XKey"
 APP_NAME="XKey"
 DMG_NAME="XKey.dmg"
 DMG_VOLUME_NAME="XKey"
+REPO_URL="https://github.com/xmannv/xkey"
+APPCAST_FILE="appcast.xml"
+SPARKLE_BIN="/tmp/Sparkle-2.8.1/bin"
+
+
 
 echo "🚀 Building XKey (Release configuration)..."
+
+# Show build mode
+if [ "$ENABLE_NOTARIZE" = true ]; then
+    echo "📦 Full Release Mode (Notarization enabled)"
+    echo "   ✅ Code signing"
+    echo "   ✅ Notarization"
+    echo "   ✅ Sparkle signing"
+    echo "   ✅ Appcast generation"
+    echo "   ✅ XKeyIM bundled in XKey.app"
+else
+    echo "🔨 Development Build Mode"
+    [ "$ENABLE_CODESIGN" = true ] && echo "   ✅ Code signing" || echo "   ⚠️  Code signing disabled"
+    [ "$ENABLE_SPARKLE_SIGN" = true ] && echo "   ✅ Sparkle signing" || echo "   ⚠️  Sparkle signing disabled"
+    [ "$ENABLE_APPCAST" = true ] && echo "   ✅ Appcast generation" || echo "   ⏭️  Appcast generation skipped"
+    [ "$ENABLE_XKEYIM_BUNDLE" = true ] && echo "   ✅ XKeyIM bundled in XKey.app" || echo "   ⏭️  XKeyIM separate build"
+fi
+echo ""
 
 # Create Release directory
 mkdir -p Release
@@ -93,16 +128,82 @@ echo "📦 Copying to ./Release/XKey.app..."
 rm -rf Release/XKey.app
 cp -R "./build/Build/Products/Release/XKey.app" Release/
 
-# Ad-hoc sign with correct identifier (required for Accessibility permissions)
-if [ "$ENABLE_CODESIGN" = false ]; then
+# Sign Sparkle framework's nested components (IMPORTANT: must be done before signing main app)
+if [ "$ENABLE_CODESIGN" = true ]; then
+    echo "🔐 Signing Sparkle framework components..."
+    
+    SPARKLE_FW="Release/XKey.app/Contents/Frameworks/Sparkle.framework/Versions/B"
+    
+    # Sign XPC Services first (deepest level)
+    if [ -d "$SPARKLE_FW/XPCServices/Installer.xpc" ]; then
+        echo "   Signing Installer.xpc..."
+        codesign --force --sign "$DEVELOPER_ID" \
+            --timestamp \
+            --options=runtime \
+            "$SPARKLE_FW/XPCServices/Installer.xpc"
+        echo "   ✅ Installer.xpc signed"
+    fi
+    
+    if [ -d "$SPARKLE_FW/XPCServices/Downloader.xpc" ]; then
+        echo "   Signing Downloader.xpc..."
+        codesign --force --sign "$DEVELOPER_ID" \
+            --timestamp \
+            --options=runtime \
+            "$SPARKLE_FW/XPCServices/Downloader.xpc"
+        echo "   ✅ Downloader.xpc signed"
+    fi
+    
+    # Sign Updater.app
+    if [ -d "$SPARKLE_FW/Updater.app" ]; then
+        echo "   Signing Updater.app..."
+        codesign --force --sign "$DEVELOPER_ID" \
+            --timestamp \
+            --options=runtime \
+            "$SPARKLE_FW/Updater.app"
+        echo "   ✅ Updater.app signed"
+    fi
+    
+    # Sign Autoupdate binary
+    if [ -f "$SPARKLE_FW/Autoupdate" ]; then
+        echo "   Signing Autoupdate binary..."
+        codesign --force --sign "$DEVELOPER_ID" \
+            --timestamp \
+            --options=runtime \
+            "$SPARKLE_FW/Autoupdate"
+        echo "   ✅ Autoupdate signed"
+    fi
+    
+    # Finally, sign the entire Sparkle.framework
+    if [ -d "Release/XKey.app/Contents/Frameworks/Sparkle.framework" ]; then
+        echo "   Signing Sparkle.framework..."
+        codesign --force --sign "$DEVELOPER_ID" \
+            --timestamp \
+            --options=runtime \
+            "Release/XKey.app/Contents/Frameworks/Sparkle.framework"
+        echo "   ✅ Sparkle.framework signed"
+    fi
+    
+    echo "✅ Sparkle framework components signed"
+fi
+
+# Re-sign XKey.app after modifying nested frameworks
+if [ "$ENABLE_CODESIGN" = true ]; then
+    echo "🔐 Re-signing XKey.app after framework modifications..."
+    codesign --force --sign "$DEVELOPER_ID" \
+        --timestamp \
+        --options=runtime \
+        Release/XKey.app
+    echo "✅ XKey.app re-signed"
+else
+    # Ad-hoc sign with correct identifier (required for Accessibility permissions)
     echo "🔐 Ad-hoc signing with correct bundle identifier..."
-    codesign --force --deep --sign - --identifier "$BUNDLE_ID" Release/XKey.app
+    codesign --force --sign - --identifier "$BUNDLE_ID" Release/XKey.app
     echo "✅ Ad-hoc signed with identifier: $BUNDLE_ID"
 fi
 
 # Verify code signature
 echo "🔍 Verifying code signature..."
-codesign -vvv --deep --strict Release/XKey.app
+codesign -vvv --strict Release/XKey.app
 echo "✅ Code signature verified"
 
 # Display signature info
@@ -183,35 +284,40 @@ if [ "$ENABLE_XKEYIM" = true ]; then
         # Re-sign after modifying Info.plist
         if [ "$ENABLE_CODESIGN" = true ]; then
             echo "🔐 Re-signing XKeyIM after Info.plist update..."
-            codesign --force --deep --sign "$DEVELOPER_ID" --timestamp --options=runtime --entitlements "XKeyIM/XKeyIM.entitlements" "Release/XKeyIM.app"
+            codesign --force --sign "$DEVELOPER_ID" --timestamp --options=runtime --entitlements "XKeyIM/XKeyIM.entitlements" "Release/XKeyIM.app"
         else
             echo "🔐 Ad-hoc signing XKeyIM with entitlements..."
-            codesign --force --deep --sign - --identifier "$XKEYIM_BUNDLE_ID" --entitlements "XKeyIM/XKeyIM.entitlements" Release/XKeyIM.app
+            codesign --force --sign - --identifier "$XKEYIM_BUNDLE_ID" --entitlements "XKeyIM/XKeyIM.entitlements" Release/XKeyIM.app
         fi
         
         # Verify signature
-        codesign -vvv --deep --strict Release/XKeyIM.app
+        codesign -vvv --strict Release/XKeyIM.app
         echo "✅ XKeyIM built successfully"
         
-        # Embed XKeyIM inside XKey.app for easy installation
-        echo "📦 Embedding XKeyIM.app inside XKey.app/Contents/Resources..."
-        mkdir -p "Release/XKey.app/Contents/Resources"
-        rm -rf "Release/XKey.app/Contents/Resources/XKeyIM.app"
-        cp -R "Release/XKeyIM.app" "Release/XKey.app/Contents/Resources/"
-        echo "✅ XKeyIM embedded in XKey.app"
+        # Embed XKeyIM inside XKey.app for easy installation (optional)
+        if [ "$ENABLE_XKEYIM_BUNDLE" = true ]; then
+            echo "📦 Embedding XKeyIM.app inside XKey.app/Contents/Resources..."
+            mkdir -p "Release/XKey.app/Contents/Resources"
+            rm -rf "Release/XKey.app/Contents/Resources/XKeyIM.app"
+            cp -R "Release/XKeyIM.app" "Release/XKey.app/Contents/Resources/"
+            echo "✅ XKeyIM embedded in XKey.app"
 
-        # Re-sign XKey.app after embedding XKeyIM (IMPORTANT: embedding modifies sealed resources)
-        echo "🔐 Re-signing XKey.app after embedding XKeyIM..."
-        if [ "$ENABLE_CODESIGN" = true ]; then
-            codesign --force --deep --sign "$DEVELOPER_ID" --timestamp --options=runtime "Release/XKey.app"
+            # Re-sign XKey.app after embedding XKeyIM (IMPORTANT: embedding modifies sealed resources)
+            echo "🔐 Re-signing XKey.app after embedding XKeyIM..."
+            if [ "$ENABLE_CODESIGN" = true ]; then
+                codesign --force --sign "$DEVELOPER_ID" --timestamp --options=runtime "Release/XKey.app"
+            else
+                codesign --force --sign - --identifier "$BUNDLE_ID" "Release/XKey.app"
+            fi
+
+            # Verify XKey.app signature after re-signing
+            echo "🔍 Verifying XKey.app signature after embedding..."
+            codesign -vvv --strict Release/XKey.app
+            echo "✅ XKey.app signature verified"
         else
-            codesign --force --deep --sign - --identifier "$BUNDLE_ID" "Release/XKey.app"
+            echo "⏭️  Skipping XKeyIM embedding (ENABLE_XKEYIM_BUNDLE=false)"
         fi
 
-        # Verify XKey.app signature after re-signing
-        echo "🔍 Verifying XKey.app signature after embedding..."
-        codesign -vvv --deep --strict Release/XKey.app
-        echo "✅ XKey.app signature verified"
         
         # Auto-install XKeyIM to user's Input Methods
         echo ""
@@ -289,6 +395,16 @@ if [ "$ENABLE_DMG" = true ]; then
     rm -rf "$DMG_TEMP_DIR"
     
     echo "✅ DMG created: Release/$DMG_NAME"
+fi
+
+# ============================================
+# Cleanup XKeyIM.app after bundling
+# ============================================
+if [ "$ENABLE_XKEYIM" = true ] && [ "$ENABLE_XKEYIM_BUNDLE" = true ] && [ -d "Release/XKeyIM.app" ]; then
+    echo ""
+    echo "🧹 Cleaning up XKeyIM.app (already bundled in XKey.app)..."
+    rm -rf "Release/XKeyIM.app"
+    echo "✅ XKeyIM.app removed"
 fi
 
 # ============================================
@@ -384,9 +500,165 @@ if [ "$ENABLE_NOTARIZE" = true ] && [ "$ENABLE_CODESIGN" = true ]; then
         echo "   - Unsigned nested code or frameworks"
         echo "   - Missing timestamp in signature"
         echo "   - Invalid entitlements"
-        exit 1
     fi
 fi
+
+# ============================================
+# Sparkle Signing (for auto-update)
+# ============================================
+if [ "$ENABLE_SPARKLE_SIGN" = true ] && [ "$ENABLE_DMG" = true ] && [ -f "Release/$DMG_NAME" ]; then
+    echo ""
+    echo "🔐 Sparkle Signing for Auto-Update..."
+    
+    # Check if Sparkle tools exist
+    if [ ! -d "$SPARKLE_BIN" ]; then
+        echo "📥 Downloading Sparkle tools (v2.8.1)..."
+        cd /tmp
+        curl -L https://github.com/sparkle-project/Sparkle/releases/download/2.8.1/Sparkle-2.8.1.tar.xz -o Sparkle-2.8.1.tar.xz
+        rm -rf Sparkle-2.8.1
+        mkdir Sparkle-2.8.1
+        cd Sparkle-2.8.1
+        tar -xf ../Sparkle-2.8.1.tar.xz
+        cd - > /dev/null
+        echo "✅ Sparkle tools downloaded"
+    fi
+    
+    # Check for private key
+    if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+        echo "⚠️  SPARKLE_PRIVATE_KEY not found in .env"
+        echo "   Attempting to retrieve from Keychain..."
+        
+        SPARKLE_PRIVATE_KEY=$(security find-generic-password -s "https://sparkle-project.org" -a "ed25519" -w 2>/dev/null || echo "")
+        
+        if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "❌ Error: Sparkle private key not found"
+            echo ""
+            echo "   To generate keys, run:"
+            echo "   $SPARKLE_BIN/generate_keys"
+            echo ""
+            echo "   Then add SPARKLE_PRIVATE_KEY to .env file"
+            echo "   Or skip Sparkle signing with: ENABLE_SPARKLE_SIGN=false"
+            exit 1
+        else
+            echo "✅ Retrieved private key from Keychain"
+        fi
+    fi
+    
+    # Sign DMG with EdDSA signature
+    echo "🔏 Signing DMG with EdDSA key..."
+    SPARKLE_SIGNATURE=$("$SPARKLE_BIN/sign_update" "Release/$DMG_NAME" --ed-key-file <(echo "$SPARKLE_PRIVATE_KEY") 2>&1 | grep -v "^$")
+    
+    if [ -z "$SPARKLE_SIGNATURE" ]; then
+        echo "❌ Error: Failed to generate Sparkle signature"
+        exit 1
+    fi
+    
+    echo "✅ DMG signed with Sparkle EdDSA signature"
+    echo "   Signature: ${SPARKLE_SIGNATURE:0:50}..."
+    
+    # Store signature for appcast generation
+    export SPARKLE_SIGNATURE
+fi
+
+# ============================================
+# Appcast Generation
+# ============================================
+if [ "$ENABLE_APPCAST" = true ] && [ "$ENABLE_DMG" = true ] && [ -f "Release/$DMG_NAME" ]; then
+    echo ""
+    echo "📝 Generating appcast.xml..."
+    
+    # Get version from Info.plist
+    CURRENT_VERSION=$(defaults read "$(pwd)/XKey/Info.plist" CFBundleShortVersionString)
+    
+    # Get DMG file size
+    DMG_SIZE=$(stat -f%z "Release/$DMG_NAME")
+    
+    # Get current date in RFC 2822 format
+    PUBDATE=$(date -u +"%a, %d %b %Y %H:%M:%S %z")
+    
+    # Get minimum system version
+    MIN_SYSTEM_VERSION=$(defaults read "$(pwd)/XKey/Info.plist" LSMinimumSystemVersion 2>/dev/null || echo "12.0")
+    
+    # Download URL
+    DOWNLOAD_URL="$REPO_URL/releases/download/v$CURRENT_VERSION/XKey.dmg"
+    
+    # Release notes (can be customized via environment variable)
+    RELEASE_NOTES="${RELEASE_NOTES:-New version available with bug fixes and improvements}"
+    
+    echo "   Version: $CURRENT_VERSION"
+    echo "   DMG Size: $DMG_SIZE bytes"
+    echo "   Date: $PUBDATE"
+    echo "   Min macOS: $MIN_SYSTEM_VERSION"
+    echo "   Download URL: $DOWNLOAD_URL"
+    
+    # Generate enclosure tag with or without signature
+    if [ -n "$SPARKLE_SIGNATURE" ]; then
+        ENCLOSURE_TAG="            <enclosure
+                url=\"$DOWNLOAD_URL\"
+                sparkle:version=\"$CURRENT_VERSION\"
+                sparkle:shortVersionString=\"$CURRENT_VERSION\"
+                sparkle:edSignature=\"$SPARKLE_SIGNATURE\"
+                length=\"$DMG_SIZE\"
+                type=\"application/octet-stream\" />"
+    else
+        ENCLOSURE_TAG="            <enclosure
+                url=\"$DOWNLOAD_URL\"
+                sparkle:version=\"$CURRENT_VERSION\"
+                sparkle:shortVersionString=\"$CURRENT_VERSION\"
+                length=\"$DMG_SIZE\"
+                type=\"application/octet-stream\" />"
+    fi
+    
+    # Create new appcast.xml
+    cat > "$APPCAST_FILE" << EOF
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>XKey Updates</title>
+        <link>https://raw.githubusercontent.com/xmannv/xkey/main/appcast.xml</link>
+        <description>XKey - Vietnamese Input Method for macOS</description>
+        <language>vi</language>
+
+        <!-- Latest Release -->
+        <item>
+            <title>Version $CURRENT_VERSION</title>
+            <link>$REPO_URL/releases/tag/v$CURRENT_VERSION</link>
+            <sparkle:version>$CURRENT_VERSION</sparkle:version>
+            <sparkle:shortVersionString>$CURRENT_VERSION</sparkle:shortVersionString>
+            <description><![CDATA[
+                <h2>Phiên bản $CURRENT_VERSION</h2>
+                <p>$RELEASE_NOTES</p>
+
+                <h3>Cài đặt</h3>
+                <ol>
+                    <li>Tải về và mở file XKey.dmg</li>
+                    <li>Kéo XKey vào thư mục Applications</li>
+                    <li>Khởi động XKey từ Applications</li>
+                </ol>
+
+                <p><a href="$REPO_URL/releases/tag/v$CURRENT_VERSION">Xem chi tiết trên GitHub</a></p>
+            ]]></description>
+            <pubDate>$PUBDATE</pubDate>
+            <sparkle:minimumSystemVersion>$MIN_SYSTEM_VERSION</sparkle:minimumSystemVersion>
+$ENCLOSURE_TAG
+        </item>
+
+        <!-- Previous releases -->
+        <!-- Add older versions below this line -->
+
+    </channel>
+</rss>
+EOF
+    
+    echo "✅ appcast.xml generated successfully!"
+    
+    if [ -n "$SPARKLE_SIGNATURE" ]; then
+        echo "   ✅ Includes EdDSA signature for secure updates"
+    else
+        echo "   ⚠️  No signature included (ENABLE_SPARKLE_SIGN=false)"
+    fi
+fi
+
 
 # Clear macOS launch services cache
 echo ""
@@ -399,17 +671,21 @@ echo "✅ Build successful!"
 echo ""
 echo "✅ Done! Release build is ready at:"
 echo "   $(pwd)/Release/XKey.app"
-if [ "$ENABLE_XKEYIM" = true ] && [ -f "Release/XKeyIM.app" ]; then
-    echo "   $(pwd)/Release/XKeyIM.app"
-    echo "   (Also embedded in XKey.app/Contents/Resources/)"
+if [ "$ENABLE_XKEYIM" = true ]; then
+    if [ "$ENABLE_XKEYIM_BUNDLE" = true ]; then
+        echo "   └── XKeyIM.app embedded in XKey.app/Contents/Resources/"
+    elif [ -f "Release/XKeyIM.app" ]; then
+        echo "   $(pwd)/Release/XKeyIM.app"
+    fi
 fi
 if [ "$ENABLE_DMG" = true ]; then
     echo "   $(pwd)/Release/$DMG_NAME"
 fi
+
 echo ""
 echo "📊 App size:"
 du -sh Release/XKey.app
-if [ "$ENABLE_XKEYIM" = true ] && [ -f "Release/XKeyIM.app" ]; then
+if [ "$ENABLE_XKEYIM" = true ] && [ "$ENABLE_XKEYIM_BUNDLE" = false ] && [ -f "Release/XKeyIM.app" ]; then
     du -sh Release/XKeyIM.app
 fi
 if [ "$ENABLE_DMG" = true ] && [ -f "Release/$DMG_NAME" ]; then
@@ -417,6 +693,7 @@ if [ "$ENABLE_DMG" = true ] && [ -f "Release/$DMG_NAME" ]; then
     echo "📀 DMG size:"
     du -sh "Release/$DMG_NAME"
 fi
+
 echo ""
 echo "🏗️  Architecture:"
 lipo -info Release/XKey.app/Contents/MacOS/XKey
@@ -433,15 +710,48 @@ if [ "$ENABLE_NOTARIZE" = true ] && [ "$ENABLE_CODESIGN" = true ]; then
     echo "📤 Notarization: COMPLETED"
 fi
 
+if [ "$ENABLE_SPARKLE_SIGN" = true ] && [ -n "$SPARKLE_SIGNATURE" ]; then
+    echo "🔐 Sparkle Signing: ENABLED"
+    echo "   EdDSA signature generated"
+fi
+
+if [ "$ENABLE_APPCAST" = true ] && [ -f "$APPCAST_FILE" ]; then
+    echo "📝 Appcast: GENERATED"
+    echo "   File: $APPCAST_FILE"
+fi
+
 echo ""
 echo "💡 Usage:"
 echo "   Default (with code signing + DMG):  ./build_release.sh"
 echo "   Without code signing:               ENABLE_CODESIGN=false ./build_release.sh"
 echo "   Without DMG:                        ENABLE_DMG=false ./build_release.sh"
 echo "   Without XKeyIM:                     ENABLE_XKEYIM=false ./build_release.sh"
+echo "   Separate XKeyIM build:              ENABLE_XKEYIM_BUNDLE=false ./build_release.sh"
 echo "   With notarization:                  ENABLE_NOTARIZE=true ./build_release.sh"
+echo "   Without Sparkle signing:            ENABLE_SPARKLE_SIGN=false ./build_release.sh"
+echo "   With appcast generation:            ENABLE_APPCAST=true ./build_release.sh"
+echo ""
+echo "   Full release workflow:              ENABLE_APPCAST=true RELEASE_NOTES=\"Your notes\" ./build_release.sh"
 echo ""
 echo "📝 For notarization, create .env file with:"
 echo "   APPLE_ID=your-apple-id@example.com"
 echo "   APPLE_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx"
 echo "   APPLE_TEAM_ID=XXXXXXXXXX"
+echo ""
+echo "🔐 For Sparkle auto-update, add to .env:"
+echo "   SPARKLE_PRIVATE_KEY=your-private-key-here"
+echo "   (Or it will be retrieved from Keychain automatically)"
+echo ""
+echo "📋 Next steps for release:"
+if [ "$ENABLE_APPCAST" = true ] && [ -f "$APPCAST_FILE" ]; then
+    CURRENT_VERSION=$(defaults read "$(pwd)/XKey/Info.plist" CFBundleShortVersionString)
+    echo "   1. Review appcast.xml: cat $APPCAST_FILE"
+    echo "   2. Commit changes: git add $APPCAST_FILE && git commit -m \"Update appcast for v$CURRENT_VERSION\""
+    echo "   3. Push to GitHub: git push origin main"
+    echo "   4. Create release: gh release create v$CURRENT_VERSION Release/XKey.dmg --title \"XKey v$CURRENT_VERSION\" --notes \"\$RELEASE_NOTES\""
+else
+    echo "   1. Update appcast: ENABLE_APPCAST=true ./build_release.sh"
+    echo "   2. Or manually: ./update_appcast.sh <version> \"Release notes\""
+    echo "   3. Create GitHub release with Release/XKey.dmg"
+fi
+
