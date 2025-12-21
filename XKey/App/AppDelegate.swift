@@ -681,6 +681,52 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         debugWindowController?.logEvent("  ✅ App switch observer registered")
+
+        // Setup overlay detector callback to restore language when overlay closes
+        setupOverlayDetectorCallback()
+    }
+
+    /// Setup callback for overlay visibility changes
+    private func setupOverlayDetectorCallback() {
+        OverlayAppDetector.shared.onOverlayVisibilityChanged = { [weak self] isVisible in
+            guard let self = self else { return }
+
+            // When overlay closes (visible → hidden), restore language for current app
+            if !isVisible {
+                self.debugWindowController?.logEvent("🔄 Overlay closed - restoring language for current app")
+                self.restoreLanguageForCurrentApp()
+            }
+        }
+    }
+
+    /// Restore language for the current frontmost app from Smart Switch
+    private func restoreLanguageForCurrentApp() {
+        guard let handler = keyboardHandler else { return }
+        guard handler.smartSwitchEnabled else { return }
+
+        // Check if overlay detection is enabled
+        let prefs = SharedSettings.shared.loadPreferences()
+        guard prefs.detectOverlayApps else { return }
+
+        // Get current frontmost app
+        guard let bundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier else { return }
+
+        // Get current language state
+        let currentLanguage = statusBarManager?.viewModel.isVietnameseEnabled == true ? 1 : 0
+
+        // Check if should restore language using Smart Switch logic
+        let result = handler.engine.checkSmartSwitchForApp(bundleId: bundleId, currentLanguage: currentLanguage)
+
+        // If should switch, restore the saved language
+        if result.shouldSwitch {
+            let newEnabled = result.newLanguage == 1
+            statusBarManager?.viewModel.isVietnameseEnabled = newEnabled
+            handler.setVietnamese(newEnabled)
+
+            debugWindowController?.logEvent("✅ Restored '\(bundleId)' language → \(newEnabled ? "Vietnamese" : "English")")
+        } else {
+            debugWindowController?.logEvent("ℹ️ No language change needed for '\(bundleId)' (current=\(currentLanguage))")
+        }
     }
     
     // MARK: - Dock Icon

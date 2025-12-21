@@ -267,12 +267,37 @@ struct AdvancedSettingsSection: View {
                 }
                 
                 SettingsGroup(title: "Smart Switch") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Toggle("Nhớ ngôn ngữ theo ứng dụng", isOn: $viewModel.preferences.smartSwitchEnabled)
-                        
-                        Text("Tự động chuyển ngôn ngữ khi chuyển app")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Main Smart Switch toggle
+                        VStack(alignment: .leading, spacing: 4) {
+                            Toggle("Nhớ ngôn ngữ theo ứng dụng", isOn: $viewModel.preferences.smartSwitchEnabled)
+
+                            Text("Tự động chuyển ngôn ngữ khi chuyển app")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        // Overlay app detection (sub-option, only shown when Smart Switch is enabled)
+                        if viewModel.preferences.smartSwitchEnabled {
+                            Divider()
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                Toggle("Hỗ trợ phát hiện Spotlight/Raycast/Alfred", isOn: $viewModel.preferences.detectOverlayApps)
+
+                                // Info message
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Tránh ghi đè ngôn ngữ của app bên dưới khi bạn toggle trong Spotlight/Raycast")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    .padding(.top, 4)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 6)
+                                    .background(Color.green.opacity(0.05))
+                                    .cornerRadius(6)
+                                }
+                            }
+                            .padding(.leading, 20)  // Indent sub-option
+                        }
                     }
                 }
                 

@@ -33,6 +33,7 @@
 		107602EE2EF4E3BA00ADC084 /* InputSourceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 107602EC2EF4E3BA00ADC084 /* InputSourceManager.swift */; };
 		1084A5462ED41EB200EA2D2A /* PreferencesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1084A5442ED41EB200EA2D2A /* PreferencesViewModel.swift */; };
 		1084A5472ED41EB200EA2D2A /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1084A5432ED41EB200EA2D2A /* PreferencesView.swift */; };
+		1089F7ED2EF76F2300E833ED /* OverlayAppDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1089F7EB2EF76F2300E833ED /* OverlayAppDetector.swift */; };
 		1097C5E52EF6662500969052 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 1097C5E42EF6662500969052 /* Sparkle */; };
 		10A214992ED42DFA005B52BD /* HotkeyRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10A214972ED42DFA005B52BD /* HotkeyRecorderView.swift */; };
 		10A2149A2ED42DFA005B52BD /* PreferencesWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10A214982ED42DFA005B52BD /* PreferencesWindowController.swift */; };
@@ -85,6 +86,7 @@
 		107602EC2EF4E3BA00ADC084 /* InputSourceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSourceManager.swift; sourceTree = "<group>"; };
 		1084A5432ED41EB200EA2D2A /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
 		1084A5442ED41EB200EA2D2A /* PreferencesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesViewModel.swift; sourceTree = "<group>"; };
+		1089F7EB2EF76F2300E833ED /* OverlayAppDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayAppDetector.swift; sourceTree = "<group>"; };
 		10A214972ED42DFA005B52BD /* HotkeyRecorderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderView.swift; sourceTree = "<group>"; };
 		10A214982ED42DFA005B52BD /* PreferencesWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesWindowController.swift; sourceTree = "<group>"; };
 		10F26F0A2ED6CAF900B9FA1F /* ConvertTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvertTool.swift; sourceTree = "<group>"; };
@@ -150,6 +152,7 @@
 		101A444A2ED419E9003F9D05 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				1089F7EB2EF76F2300E833ED /* OverlayAppDetector.swift */,
 				1049D2E12EF64F6500FDC8AC /* DebugLogger.swift */,
 				10FDCC1B2EF5942400B2D9AC /* InputSourceSwitcher.swift */,
 				100D2BE52EF2C72600C26B87 /* SharedSettings.swift */,
@@ -449,6 +452,7 @@
 				LAUNCHATLOGIN001 /* LaunchAtLogin.swift in Sources */,
 				STATUSBARVM001 /* StatusBarViewModel.swift in Sources */,
 				DEBUGVM001 /* DebugViewModel.swift in Sources */,
+				1089F7ED2EF76F2300E833ED /* OverlayAppDetector.swift in Sources */,
 				DEBUGVIEW001 /* DebugView.swift in Sources */,
 				MACROVM001 /* MacroManagementViewModel.swift in Sources */,
 				CONVERTVM001 /* ConvertToolViewModel.swift in Sources */,

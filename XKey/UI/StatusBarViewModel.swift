@@ -63,9 +63,25 @@ class StatusBarViewModel: ObservableObject {
     private func saveLanguageForCurrentApp() {
         guard let handler = keyboardHandler else { return }
         guard handler.smartSwitchEnabled else { return }
-        
+
+        // Check if overlay app detection is enabled
+        let prefs = SharedSettings.shared.loadPreferences()
+        if prefs.detectOverlayApps {
+            // Check if an overlay app (Spotlight/Raycast/Alfred) is currently visible
+            if OverlayAppDetector.shared.isOverlayAppVisible() {
+                if let overlayName = OverlayAppDetector.shared.getVisibleOverlayAppName() {
+                    log("⚠️ Smart Switch: Skipping save (overlay app '\(overlayName)' is active)")
+                } else {
+                    log("⚠️ Smart Switch: Skipping save (overlay app detected)")
+                }
+                // Don't save language preference when overlay is active
+                // This prevents overwriting the underlying app's language setting
+                return
+            }
+        }
+
         guard let bundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier else { return }
-        
+
         let language = isVietnameseEnabled ? 1 : 0
         handler.engine.saveAppLanguage(bundleId: bundleId, language: language)
         log("📝 Smart Switch: Saved '\(bundleId)' → \(isVietnameseEnabled ? "Vietnamese" : "English")")

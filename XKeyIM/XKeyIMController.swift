@@ -36,7 +36,7 @@ class XKeyIMController: IMKInputController {
 
     /// Last settings reload time (for debouncing)
     private var lastReloadTime: Date = .distantPast
-    
+
     // MARK: - Initialization
     
     override init!(server: IMKServer!, delegate: Any!, client inputClient: Any!) {
