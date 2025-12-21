@@ -685,7 +685,37 @@ class VNEngine {
         }
         
         if !isChanged {
-            logCallback?("  → No pattern matched, inserting key as-is")
+            logCallback?("  → No pattern matched, checking for VNI fallback...")
+            
+            // VNI fallback: For keys 1-5, if pattern didn't match but we have vowels,
+            // try to apply tone anyway (free-mark style like Telex)
+            if vInputType == 1 && (keyCode == VietnameseData.KEY_1 || keyCode == VietnameseData.KEY_2 ||
+                                   keyCode == VietnameseData.KEY_3 || keyCode == VietnameseData.KEY_4 ||
+                                   keyCode == VietnameseData.KEY_5) {
+                findAndCalculateVowel()
+                
+                if vowelCount > 0 {
+                    logCallback?("  → VNI fallback: found vowels, applying tone via insertMarkInternal()")
+                    
+                    // Determine which mark to insert
+                    var markMask: UInt32 = 0
+                    switch keyCode {
+                    case VietnameseData.KEY_1: markMask = VNEngine.MARK1_MASK  // Sắc
+                    case VietnameseData.KEY_2: markMask = VNEngine.MARK2_MASK  // Huyền
+                    case VietnameseData.KEY_3: markMask = VNEngine.MARK3_MASK  // Hỏi
+                    case VietnameseData.KEY_4: markMask = VNEngine.MARK4_MASK  // Ngã
+                    case VietnameseData.KEY_5: markMask = VNEngine.MARK5_MASK  // Nặng
+                    default: break
+                    }
+                    
+                    if markMask != 0 {
+                        insertMarkInternal(markMask: markMask, canModifyFlag: true)
+                        return
+                    }
+                }
+            }
+            
+            logCallback?("  → No fallback, inserting key as-is")
             insertKey(keyCode: keyCode, isCaps: isCaps)
         }
     }
@@ -779,35 +809,42 @@ class VNEngine {
                     insertAOE(keyCode: keyForAEO, isCaps: isCaps)
                 } else if isKeyW {
                     // VNI special validation for key 7 and key 8:
-                    // Key 7: horn (móc) for 'o' → 'ơ' and 'u' → 'ư'
+                    // Key 7: horn (móc) for 'o' → 'ơ' and 'u' → 'ư'  
                     // Key 8: breve (trăng) only for 'a' → 'ă'
                     var shouldProcess = true
                     if vInputType == 1 {
-                        // Re-search for vowels including U for horn (key 7)
-                        VEI = -1
-                        for i in stride(from: Int(index) - 1, through: 0, by: -1) {
-                            let key = chr(i)
-                            if key == VietnameseData.KEY_O || key == VietnameseData.KEY_U ||
-                               key == VietnameseData.KEY_A || key == VietnameseData.KEY_E {
-                                VEI = i
-                                break
+                        // First, find the vowel range in the word (like Telex does)
+                        findAndCalculateVowel()
+                        
+                        if keyCode == VietnameseData.KEY_7 {
+                            // Key 7: horn (móc) - search for ANY 'o' or 'u' in the VOWEL group
+                            // This matches Telex behavior where insertW() handles vowel combinations
+                            // like "ua" → "ưa", "uo" → "ươ" intelligently
+                            var hasValidVowel = false
+                            if vowelCount > 0 {
+                                for i in vowelStartIndex...vowelEndIndex {
+                                    let key = chr(i)
+                                    if key == VietnameseData.KEY_O || key == VietnameseData.KEY_U {
+                                        hasValidVowel = true
+                                        break
+                                    }
+                                }
                             }
-                        }
-
-                        if VEI < 0 {
-                            // No vowel found - don't process, insert key as-is
-                            shouldProcess = false
-                        } else {
-                            let vowelKey = chr(VEI)
-                            if keyCode == VietnameseData.KEY_7 {
-                                // Key 7: horn (móc) for 'o' → 'ơ' and 'u' → 'ư'
-                                // Only valid if previous vowel is 'o' or 'u'
-                                shouldProcess = (vowelKey == VietnameseData.KEY_O || vowelKey == VietnameseData.KEY_U)
-                            } else if keyCode == VietnameseData.KEY_8 {
-                                // Key 8: breve (trăng) only for 'a' → 'ă'
-                                // Only valid if previous vowel is 'a'
-                                shouldProcess = (vowelKey == VietnameseData.KEY_A)
+                            shouldProcess = hasValidVowel
+                        } else if keyCode == VietnameseData.KEY_8 {
+                            // Key 8: breve (trăng) only for 'a' → 'ă'
+                            // Search for 'a' in the VOWEL group
+                            var hasValidVowel = false
+                            if vowelCount > 0 {
+                                for i in vowelStartIndex...vowelEndIndex {
+                                    let key = chr(i)
+                                    if key == VietnameseData.KEY_A {
+                                        hasValidVowel = true
+                                        break
+                                    }
+                                }
                             }
+                            shouldProcess = hasValidVowel
                         }
                     }
                     if shouldProcess {
@@ -823,6 +860,39 @@ class VNEngine {
         
         if !isChanged {
             logCallback?("handleVowelKey: no pattern matched, inserting key")
+            
+            // VNI fallback: For key 7/8, if pattern didn't match but we have valid vowels,
+            // try to apply horn/breve anyway (free-mark style like Telex)
+            if vInputType == 1 && (keyCode == VietnameseData.KEY_7 || keyCode == VietnameseData.KEY_8) {
+                findAndCalculateVowel()
+                var hasValidVowel = false
+                
+                if vowelCount > 0 {
+                    for i in vowelStartIndex...vowelEndIndex {
+                        let key = chr(i)
+                        if keyCode == VietnameseData.KEY_7 {
+                            // Key 7: horn - need 'o' or 'u'
+                            if key == VietnameseData.KEY_O || key == VietnameseData.KEY_U {
+                                hasValidVowel = true
+                                break
+                            }
+                        } else if keyCode == VietnameseData.KEY_8 {
+                            // Key 8: breve - need 'a'
+                            if key == VietnameseData.KEY_A {
+                                hasValidVowel = true
+                                break
+                            }
+                        }
+                    }
+                }
+                
+                if hasValidVowel {
+                    logCallback?("handleVowelKey: VNI fallback - applying horn/breve via insertW()")
+                    insertW(keyCode: VietnameseData.KEY_W, isCaps: isCaps)
+                    return
+                }
+            }
+            
             if keyCode == VietnameseData.KEY_W && vInputType != 2 {
                 checkForStandaloneChar(data: keyCode, isCaps: isCaps, keyWillReverse: VietnameseData.KEY_U)
             } else {

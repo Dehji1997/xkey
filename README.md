@@ -5,7 +5,7 @@
   
   **Bộ gõ tiếng Việt hiện đại cho macOS**
   
-  [![Version](https://img.shields.io/badge/version-1.2.7-blue.svg)](https://github.com/xmannv/xkey/releases)
+  [![Version](https://img.shields.io/badge/version-1.2.8-blue.svg)](https://github.com/xmannv/xkey/releases)
   [![macOS](https://img.shields.io/badge/macOS-12.0+-green.svg)](https://www.apple.com/macos/)
   [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 </div>
@@ -96,7 +96,7 @@ Tự động thay thế văn bản với Macro:
 - **Tạm tắt thông minh**: Ctrl tắt chính tả, Option tắt bộ gõ
 - **Debug Window**: Theo dõi real-time hoạt động của bộ gõ
 
-### 8. Window Title Rules (Mới)
+### 8. Window Title Rules
 
 Phát hiện ngữ cảnh đặc biệt dựa trên tiêu đề cửa sổ, giải quyết vấn đề gõ tiếng Việt trong các web apps:
 
@@ -111,6 +111,30 @@ Phát hiện ngữ cảnh đặc biệt dựa trên tiêu đề cửa sổ, gi�
 - ✅ Có thể tùy chỉnh rules theo nhu cầu
 
 **Cấu hình:** Settings → Nâng cao → Quy tắc theo Window Title
+
+#### Hướng dẫn thêm quy tắc mới
+
+1. Mở **Settings** → **Nâng cao** → **Quy tắc theo Window Title**
+2. Nhấn **"Thêm quy tắc"**
+3. Điền thông tin:
+   - **Tên**: Tên hiển thị cho quy tắc (VD: "Safari Google Docs" hoặc "Safari Google Tài liệu")
+   - **Bundle ID**: `*` để áp dụng cho tất cả apps, hoặc chọn app cụ thể (VD: "com.google.Safari")
+   - **Title Pattern**: Từ khóa để nhận diện trong tiêu đề cửa sổ (VD: "Google Docs" hoặc "Google Tài liệu")
+   - **Match mode**: Chọn cách so khớp (Chứa, Bắt đầu bằng, Kết thúc bằng, Khớp chính xác, Regex)
+4. Cấu hình behavior (tùy chọn):
+   - **Ghi đè Marked Text**: Bật/tắt gạch chân khi gõ
+   - **Ghi đè Injection Method**: Chọn Fast, Slow, Selection, hoặc Autocomplete (VD: "Slow" cho Safari Google Docs)
+   - **Tùy chỉnh Injection Delays**: Điều chỉnh delay (µs) cho Backspace, Wait, Text
+   - **Phương thức gửi text**: Chọn Chunked hoặc One-by-One (VD: "One-by-One" cho Safari Google Docs)
+5. Nhấn **"Thêm"** để lưu
+
+> **💡 Lưu ý quan trọng:** Nếu bạn sử dụng Google Docs/Sheets/Slides với ngôn ngữ **tiếng Việt**, tiêu đề cửa sổ sẽ hiển thị là **"Google Tài liệu"**, **"Google Trang tính"**, **"Google Trang trình bày"** thay vì tên tiếng Anh. Bạn cần tạo thêm quy tắc với Title Pattern tương ứng:
+>
+> | Tên tiếng Anh | Tên tiếng Việt |
+> |---------------|----------------|
+> | Google Docs | Google Tài liệu |
+> | Google Sheets | Google Trang tính |
+> | Google Slides | Google Trang trình bày |
 
 ---
 

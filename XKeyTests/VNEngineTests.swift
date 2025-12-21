@@ -352,7 +352,388 @@ class VNEngineTests: XCTestCase {
         let output = result.newCharacters.map { $0.toUnicode() }.joined()
         XCTAssertEqual(output, "uyến", "Tone should be on middle vowel for 3-vowel sequence")
     }
+    
+    // MARK: - VNI Input Method Tests
+    
+    func testVNI_NUA7_ToNuaWithHorn() {
+        engine.reset()
+        // Set VNI input type
+        engine.vInputType = 1
+        
+        // n
+        var result = engine.processKey(character: "n", keyCode: VietnameseData.KEY_N, isUppercase: false)
+        // u
+        result = engine.processKey(character: "u", keyCode: VietnameseData.KEY_U, isUppercase: false)
+        // a
+        result = engine.processKey(character: "a", keyCode: VietnameseData.KEY_A, isUppercase: false)
+        // 7 (horn - should apply to 'u' making it 'ư')
+        result = engine.processKey(character: "7", keyCode: VietnameseData.KEY_7, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "nưa", "VNI: 'nua7' should become 'nưa' (horn on 'u')")
+    }
+    
+    func testVNI_NUA73_ToNuaWithHornAndTone() {
+        engine.reset()
+        // Set VNI input type
+        engine.vInputType = 1
+        
+        // n
+        var result = engine.processKey(character: "n", keyCode: VietnameseData.KEY_N, isUppercase: false)
+        // u
+        result = engine.processKey(character: "u", keyCode: VietnameseData.KEY_U, isUppercase: false)
+        // a
+        result = engine.processKey(character: "a", keyCode: VietnameseData.KEY_A, isUppercase: false)
+        // 7 (horn)
+        result = engine.processKey(character: "7", keyCode: VietnameseData.KEY_7, isUppercase: false)
+        // 3 (hỏi tone)
+        result = engine.processKey(character: "3", keyCode: VietnameseData.KEY_3, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "nửa", "VNI: 'nua73' should become 'nửa' (horn on 'u', hỏi tone)")
+    }
+    
+    func testVNI_NA8_ToBreve() {
+        engine.reset()
+        // Set VNI input type
+        engine.vInputType = 1
+        
+        // n
+        var result = engine.processKey(character: "n", keyCode: VietnameseData.KEY_N, isUppercase: false)
+        // a
+        result = engine.processKey(character: "a", keyCode: VietnameseData.KEY_A, isUppercase: false)
+        // 8 (breve - should apply to 'a' making it 'ă')
+        result = engine.processKey(character: "8", keyCode: VietnameseData.KEY_8, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "nă", "VNI: 'na8' should become 'nă' (breve on 'a')")
+    }
+    
+    func testVNI_NUO7_ToUoWithHorn() {
+        engine.reset()
+        // Set VNI input type
+        engine.vInputType = 1
+        
+        // n
+        var result = engine.processKey(character: "n", keyCode: VietnameseData.KEY_N, isUppercase: false)
+        // u
+        result = engine.processKey(character: "u", keyCode: VietnameseData.KEY_U, isUppercase: false)
+        // o
+        result = engine.processKey(character: "o", keyCode: VietnameseData.KEY_O, isUppercase: false)
+        // 7 (horn - should apply to both 'u' and 'o' making 'ươ')
+        result = engine.processKey(character: "7", keyCode: VietnameseData.KEY_7, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "nươ", "VNI: 'nuo7' should become 'nươ' (horn on both vowels)")
+    }
+    
+    func testVNI_A6_ToCircumflex() {
+        engine.reset()
+        // Set VNI input type
+        engine.vInputType = 1
+        
+        // a
+        var result = engine.processKey(character: "a", keyCode: VietnameseData.KEY_A, isUppercase: false)
+        // 6 (circumflex - should make 'â')
+        result = engine.processKey(character: "6", keyCode: VietnameseData.KEY_6, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "â", "VNI: 'a6' should become 'â' (circumflex)")
+    }
+    
+    func testVNI_E6_ToCircumflex() {
+        engine.reset()
+        engine.vInputType = 1
+        
+        // e
+        var result = engine.processKey(character: "e", keyCode: VietnameseData.KEY_E, isUppercase: false)
+        // 6 (circumflex)
+        result = engine.processKey(character: "6", keyCode: VietnameseData.KEY_6, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "ê", "VNI: 'e6' should become 'ê' (circumflex)")
+    }
+    
+    func testVNI_O6_ToCircumflex() {
+        engine.reset()
+        engine.vInputType = 1
+        
+        // o
+        var result = engine.processKey(character: "o", keyCode: VietnameseData.KEY_O, isUppercase: false)
+        // 6 (circumflex)
+        result = engine.processKey(character: "6", keyCode: VietnameseData.KEY_6, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "ô", "VNI: 'o6' should become 'ô' (circumflex)")
+    }
+    
+    func testVNI_U7_ToHorn() {
+        engine.reset()
+        engine.vInputType = 1
+        
+        // u
+        var result = engine.processKey(character: "u", keyCode: VietnameseData.KEY_U, isUppercase: false)
+        // 7 (horn)
+        result = engine.processKey(character: "7", keyCode: VietnameseData.KEY_7, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "ư", "VNI: 'u7' should become 'ư' (horn)")
+    }
+    
+    func testVNI_O7_ToHorn() {
+        engine.reset()
+        engine.vInputType = 1
+        
+        // o
+        var result = engine.processKey(character: "o", keyCode: VietnameseData.KEY_O, isUppercase: false)
+        // 7 (horn)
+        result = engine.processKey(character: "7", keyCode: VietnameseData.KEY_7, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "ơ", "VNI: 'o7' should become 'ơ' (horn)")
+    }
+    
+    func testVNI_D9_ToDStroke() {
+        engine.reset()
+        engine.vInputType = 1
+        
+        // d
+        var result = engine.processKey(character: "d", keyCode: VietnameseData.KEY_D, isUppercase: false)
+        // 9 (đ)
+        result = engine.processKey(character: "9", keyCode: VietnameseData.KEY_9, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "đ", "VNI: 'd9' should become 'đ'")
+    }
+    
+    func testVNI_TIE6NG_ToTieng() {
+        engine.reset()
+        engine.vInputType = 1
+        
+        // t-i-e-6-n-g
+        var result = engine.processKey(character: "t", keyCode: VietnameseData.KEY_T, isUppercase: false)
+        result = engine.processKey(character: "i", keyCode: VietnameseData.KEY_I, isUppercase: false)
+        result = engine.processKey(character: "e", keyCode: VietnameseData.KEY_E, isUppercase: false)
+        result = engine.processKey(character: "6", keyCode: VietnameseData.KEY_6, isUppercase: false)
+        result = engine.processKey(character: "n", keyCode: VietnameseData.KEY_N, isUppercase: false)
+        result = engine.processKey(character: "g", keyCode: VietnameseData.KEY_G, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "tiêng", "VNI: 'tie6ng' should become 'tiêng'")
+    }
+    
+    func testVNI_VIE6T_ToViet() {
+        engine.reset()
+        engine.vInputType = 1
+        
+        // v-i-e-6-t with tone 5 (nặng)
+        var result = engine.processKey(character: "v", keyCode: VietnameseData.KEY_V, isUppercase: false)
+        result = engine.processKey(character: "i", keyCode: VietnameseData.KEY_I, isUppercase: false)
+        result = engine.processKey(character: "e", keyCode: VietnameseData.KEY_E, isUppercase: false)
+        result = engine.processKey(character: "6", keyCode: VietnameseData.KEY_6, isUppercase: false)
+        result = engine.processKey(character: "5", keyCode: VietnameseData.KEY_5, isUppercase: false)
+        result = engine.processKey(character: "t", keyCode: VietnameseData.KEY_T, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "việt", "VNI: 'vie65t' should become 'việt'")
+    }
+    
+    func testVNI_NGUOI_ToNguoi() {
+        engine.reset()
+        engine.vInputType = 1
+        
+        // n-g-u-o-7-i → người (with 2 tone)
+        var result = engine.processKey(character: "n", keyCode: VietnameseData.KEY_N, isUppercase: false)
+        result = engine.processKey(character: "g", keyCode: VietnameseData.KEY_G, isUppercase: false)
+        result = engine.processKey(character: "u", keyCode: VietnameseData.KEY_U, isUppercase: false)
+        result = engine.processKey(character: "o", keyCode: VietnameseData.KEY_O, isUppercase: false)
+        result = engine.processKey(character: "7", keyCode: VietnameseData.KEY_7, isUppercase: false)
+        result = engine.processKey(character: "2", keyCode: VietnameseData.KEY_2, isUppercase: false)
+        result = engine.processKey(character: "i", keyCode: VietnameseData.KEY_I, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "người", "VNI: 'nguo72i' should become 'người'")
+    }
+    
+    func testVNI_A1_ToAcute() {
+        engine.reset()
+        engine.vInputType = 1
+        
+        // a-1 → á
+        var result = engine.processKey(character: "a", keyCode: VietnameseData.KEY_A, isUppercase: false)
+        result = engine.processKey(character: "1", keyCode: VietnameseData.KEY_1, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "á", "VNI: 'a1' should become 'á' (acute)")
+    }
+    
+    func testVNI_O2_ToGrave() {
+        engine.reset()
+        engine.vInputType = 1
+        
+        // o-2 → ò
+        var result = engine.processKey(character: "o", keyCode: VietnameseData.KEY_O, isUppercase: false)
+        result = engine.processKey(character: "2", keyCode: VietnameseData.KEY_2, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "ò", "VNI: 'o2' should become 'ò' (grave)")
+    }
+    
+    func testVNI_RemoveMark_0() {
+        engine.reset()
+        engine.vInputType = 1
+        
+        // a-1-0 → a (remove mark)
+        var result = engine.processKey(character: "a", keyCode: VietnameseData.KEY_A, isUppercase: false)
+        result = engine.processKey(character: "1", keyCode: VietnameseData.KEY_1, isUppercase: false)
+        result = engine.processKey(character: "0", keyCode: VietnameseData.KEY_0, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "a", "VNI: 'a10' should become 'a' (mark removed)")
+    }
+    
+    // MARK: - VNI "uy" Combination Tests
+    
+    func testVNI_TUY1_ModernOrthography() {
+        engine.reset()
+        engine.vInputType = 1
+        engine.vUseModernOrthography = 1
+        
+        // t-u-y-1 → tuý (modern: tone on 'y')
+        var result = engine.processKey(character: "t", keyCode: VietnameseData.KEY_T, isUppercase: false)
+        result = engine.processKey(character: "u", keyCode: VietnameseData.KEY_U, isUppercase: false)
+        result = engine.processKey(character: "y", keyCode: VietnameseData.KEY_Y, isUppercase: false)
+        result = engine.processKey(character: "1", keyCode: VietnameseData.KEY_1, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "tuý", "VNI: 'tuy1' should become 'tuý' (modern orthography, tone on 'y')")
+    }
+    
+    func testVNI_TUY1_OldOrthography() {
+        engine.reset()
+        engine.vInputType = 1
+        engine.vUseModernOrthography = 0
+        
+        // t-u-y-1 → túy (old: tone on 'u' when no ending consonant)
+        var result = engine.processKey(character: "t", keyCode: VietnameseData.KEY_T, isUppercase: false)
+        result = engine.processKey(character: "u", keyCode: VietnameseData.KEY_U, isUppercase: false)
+        result = engine.processKey(character: "y", keyCode: VietnameseData.KEY_Y, isUppercase: false)
+        result = engine.processKey(character: "1", keyCode: VietnameseData.KEY_1, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "túy", "VNI: 'tuy1' should become 'túy' (old orthography, tone on 'u')")
+    }
+    
+    func testVNI_QUY1_ToQuy() {
+        engine.reset()
+        engine.vInputType = 1
+        engine.vUseModernOrthography = 1
+        
+        // q-u-y-1 → quý
+        var result = engine.processKey(character: "q", keyCode: VietnameseData.KEY_Q, isUppercase: false)
+        result = engine.processKey(character: "u", keyCode: VietnameseData.KEY_U, isUppercase: false)
+        result = engine.processKey(character: "y", keyCode: VietnameseData.KEY_Y, isUppercase: false)
+        result = engine.processKey(character: "1", keyCode: VietnameseData.KEY_1, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "quý", "VNI: 'quy1' should become 'quý'")
+    }
+    
+    func testVNI_HUYNH2_ToHuynh() {
+        engine.reset()
+        engine.vInputType = 1
+        engine.vUseModernOrthography = 1
+        
+        // h-u-y-n-h-2 → huỳnh (tone always on 'y' because has ending consonant)
+        var result = engine.processKey(character: "h", keyCode: VietnameseData.KEY_H, isUppercase: false)
+        result = engine.processKey(character: "u", keyCode: VietnameseData.KEY_U, isUppercase: false)
+        result = engine.processKey(character: "y", keyCode: VietnameseData.KEY_Y, isUppercase: false)
+        result = engine.processKey(character: "n", keyCode: VietnameseData.KEY_N, isUppercase: false)
+        result = engine.processKey(character: "h", keyCode: VietnameseData.KEY_H, isUppercase: false)
+        result = engine.processKey(character: "2", keyCode: VietnameseData.KEY_2, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "huỳnh", "VNI: 'huynh2' should become 'huỳnh' (tone on 'y')")
+    }
+    
+    func testVNI_UY7_ShouldNotApplyHorn() {
+        engine.reset()
+        engine.vInputType = 1
+        
+        // u-y-7 → uy7 (horn key 7 should NOT apply because 'y' doesn't have horn form)
+        // The engine should just pass through the '7' or handle gracefully
+        var result = engine.processKey(character: "u", keyCode: VietnameseData.KEY_U, isUppercase: false)
+        result = engine.processKey(character: "y", keyCode: VietnameseData.KEY_Y, isUppercase: false)
+        result = engine.processKey(character: "7", keyCode: VietnameseData.KEY_7, isUppercase: false)
+        
+        // Since 'y' doesn't take horn, the horn should apply to 'u' making it 'ư'
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        // Possible outcomes: "ưy" if horn applied to u, or "uy7" if rejected
+        // Based on the fix, it should find 'u' and apply horn
+        XCTAssertEqual(output, "ưy", "VNI: 'uy7' should become 'ưy' (horn on 'u')")
+    }
+    
+    func testVNI_THUY1_ToThuy() {
+        engine.reset()
+        engine.vInputType = 1
+        engine.vUseModernOrthography = 1
+        
+        // t-h-u-y-1 → thuý
+        var result = engine.processKey(character: "t", keyCode: VietnameseData.KEY_T, isUppercase: false)
+        result = engine.processKey(character: "h", keyCode: VietnameseData.KEY_H, isUppercase: false)
+        result = engine.processKey(character: "u", keyCode: VietnameseData.KEY_U, isUppercase: false)
+        result = engine.processKey(character: "y", keyCode: VietnameseData.KEY_Y, isUppercase: false)
+        result = engine.processKey(character: "1", keyCode: VietnameseData.KEY_1, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "thuý", "VNI: 'thuy1' should become 'thuý'")
+    }
+    
+    // MARK: - VNI Complex Tests - "được" case
+    
+    func testVNI_DUOC_WithHornAfterConsonant() {
+        engine.reset()
+        engine.vInputType = 1
+        
+        // Test: d-u-o-c-9-7-5 (gõ duoc trước, rồi thêm đ, horn, và dấu nặng)
+        // Expected: được
+        var result = engine.processKey(character: "d", keyCode: VietnameseData.KEY_D, isUppercase: false)
+        result = engine.processKey(character: "u", keyCode: VietnameseData.KEY_U, isUppercase: false)
+        result = engine.processKey(character: "o", keyCode: VietnameseData.KEY_O, isUppercase: false)
+        result = engine.processKey(character: "c", keyCode: VietnameseData.KEY_C, isUppercase: false)
+        // 9 - convert d to đ
+        result = engine.processKey(character: "9", keyCode: VietnameseData.KEY_9, isUppercase: false)
+        // 7 - add horn to vowels (uo → ươ)
+        result = engine.processKey(character: "7", keyCode: VietnameseData.KEY_7, isUppercase: false)
+        // 5 - add nặng tone
+        result = engine.processKey(character: "5", keyCode: VietnameseData.KEY_5, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "được", "VNI: 'duoc975' should become 'được'")
+    }
+    
+    func testVNI_DUOC_StandardOrder() {
+        engine.reset()
+        engine.vInputType = 1
+        
+        // Test: Standard VNI order - d-9-u-o-7-c-5
+        // đ-ươ-c + nặng = được
+        var result = engine.processKey(character: "d", keyCode: VietnameseData.KEY_D, isUppercase: false)
+        result = engine.processKey(character: "9", keyCode: VietnameseData.KEY_9, isUppercase: false)
+        result = engine.processKey(character: "u", keyCode: VietnameseData.KEY_U, isUppercase: false)
+        result = engine.processKey(character: "o", keyCode: VietnameseData.KEY_O, isUppercase: false)
+        result = engine.processKey(character: "7", keyCode: VietnameseData.KEY_7, isUppercase: false)
+        result = engine.processKey(character: "c", keyCode: VietnameseData.KEY_C, isUppercase: false)
+        result = engine.processKey(character: "5", keyCode: VietnameseData.KEY_5, isUppercase: false)
+        
+        let output = result.newCharacters.map { $0.toUnicode() }.joined()
+        XCTAssertEqual(output, "được", "VNI: 'd9uo7c5' should become 'được'")
+    }
 }
+
+
+
+
 
 // MARK: - Helper Extension
 

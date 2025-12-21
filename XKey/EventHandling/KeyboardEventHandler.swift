@@ -157,7 +157,7 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         // Reset engine to clear buffer when macros change
         // This prevents stale buffer from interfering with new macro matching
         engine.reset()
-        injector.markNewSession()
+        injector.markNewSession(preserveMidSentence: true)  // Preserve mid-sentence state when macros change
     }
     
     // MARK: - Smart Switch Data Loading
@@ -248,7 +248,7 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         if event.isOptionPressed && tempOffEngineEnabled {
             // Temporarily disable engine when Option is pressed
             engine.reset()
-            injector.markNewSession()
+            injector.markNewSession(preserveMidSentence: true)  // Preserve mid-sentence state
             return false
         }
 
@@ -267,14 +267,14 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         // Don't process if Option is pressed and tempOffEngine is NOT enabled
         if event.isOptionPressed && !tempOffEngineEnabled {
             engine.reset()
-            injector.markNewSession()
+            injector.markNewSession(preserveMidSentence: true)  // Preserve mid-sentence state
             return false
         }
 
         // If only Ctrl is pressed and tempOffSpelling is NOT enabled, skip processing
         if event.isControlPressed && !tempOffSpellingEnabled {
             engine.reset()
-            injector.markNewSession()
+            injector.markNewSession(preserveMidSentence: true)  // Preserve mid-sentence state
             return false
         }
 
@@ -340,8 +340,8 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
                             fixAutocomplete: false
                         )
 
-                        // Mark new session after undo
-                        injector.markNewSession()
+                        // Mark new session after undo, preserve mid-sentence state
+                        injector.markNewSession(preserveMidSentence: true)
 
                         return nil  // Consume the event
                     }
@@ -355,7 +355,7 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         // Handle Forward Delete (Fn+Delete)
         if keyCode == 0x75 { // Forward Delete
             engine.reset()
-            injector.markNewSession()
+            injector.markNewSession(preserveMidSentence: true)  // Preserve mid-sentence state after Forward Delete
             return event  // Pass through
         }
 

@@ -38,10 +38,14 @@ class CharacterInjector {
         eventSource = CGEventSource(stateID: .privateState)
     }
     /// Mark as new input session (call when cursor moves or new field focused)
-    /// - Parameter cursorMoved: true if cursor was moved by user (mouse click or arrow keys)
-    func markNewSession(cursorMoved: Bool = false) {
-        isTypingMidSentence = cursorMoved  // If cursor moved, we're likely typing in middle of text
-        debugCallback?("New session: isTypingMidSentence=\(cursorMoved)")
+    /// - Parameters:
+    ///   - cursorMoved: true if cursor was moved by user (mouse click or arrow keys)
+    ///   - preserveMidSentence: if true, keep current isTypingMidSentence value (for Escape undo, Forward Delete, etc.)
+    func markNewSession(cursorMoved: Bool = false, preserveMidSentence: Bool = false) {
+        if !preserveMidSentence {
+            isTypingMidSentence = cursorMoved  // If cursor moved, we're likely typing in middle of text
+        }
+        debugCallback?("New session: isTypingMidSentence=\(isTypingMidSentence), cursorMoved=\(cursorMoved), preserved=\(preserveMidSentence)")
     }
     
     /// Check if currently typing in middle of sentence (cursor was moved)
