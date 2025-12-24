@@ -2,7 +2,7 @@
 name: Đề xuất tính năng
 about: Gợi ý thêm tính năng cho ứng dụng
 title: "[FEATURE_REQUEST]"
-labels: ''
+labels: question
 assignees: ''
 
 ---

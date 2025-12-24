@@ -2,7 +2,7 @@
 name: Thông báo lỗi ứng dụng
 about: Báo cáo về một lỗi của ứng dụng
 title: "[BUG]"
-labels: ''
+labels: bug
 assignees: ''
 
 ---
