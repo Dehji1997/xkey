@@ -414,6 +414,7 @@ struct RuleRowView: View {
     var onToggle: ((Bool) -> Void)?
     
     @State private var isHovered = false
+    @State private var showCopiedFeedback = false
     
     var body: some View {
         HStack(spacing: 12) {
@@ -488,9 +489,18 @@ struct RuleRowView: View {
                 .help(rule.isEnabled ? "Tắt quy tắc này" : "Bật quy tắc này")
             }
             
-            // Edit/Delete actions (only for custom rules)
+            // Edit/Delete/Copy actions (only for custom rules)
             if !isBuiltIn {
                 HStack(spacing: 8) {
+                    // Copy JSON button
+                    Button(action: copyRuleJSON) {
+                        Image(systemName: showCopiedFeedback ? "checkmark" : "doc.on.doc")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(showCopiedFeedback ? .green : .purple)
+                    .help("Copy JSON của quy tắc")
+                    
                     if let onEdit = onEdit {
                         Button(action: onEdit) {
                             Image(systemName: "pencil")
@@ -529,6 +539,33 @@ struct RuleRowView: View {
         case .slow: return "Slow"
         case .selection: return "Select"
         case .autocomplete: return "Auto"
+        }
+    }
+    
+    private func copyRuleJSON() {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let jsonData = try encoder.encode([rule])
+            
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(jsonString, forType: .string)
+                
+                // Show feedback
+                withAnimation {
+                    showCopiedFeedback = true
+                }
+                
+                // Reset feedback after 1.5 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    withAnimation {
+                        showCopiedFeedback = false
+                    }
+                }
+            }
+        } catch {
+            print("Failed to encode rule to JSON: \(error)")
         }
     }
 }

@@ -194,6 +194,17 @@ extension VNEngine {
         guard tempDisableKey else { return false }
         guard index > 0 else { return false }
         
+        // IMPORTANT: Do not restore very short words (1-2 characters)
+        // These are often part of emoji autocomplete sequences (e.g., ":d" → 😃)
+        // or other special character sequences that editors autocomplete.
+        // Restoring them would delete the autocompleted content.
+        // Example: User types ":d", editor autocompletes to emoji, then Space is pressed.
+        // If we restore "d", we'll delete the emoji.
+        if index <= 2 {
+            logCallback?("Restore Wrong Spelling: Skipping restore for short word (length=\(index))")
+            return false
+        }
+        
         // Get original typed keys from keyStates
         var originalWord = [UInt32]()
         for i in 0..<Int(stateIndex) {

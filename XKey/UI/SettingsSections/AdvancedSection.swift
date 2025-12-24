@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct AdvancedSection: View {
     @ObservedObject var viewModel: PreferencesViewModel
@@ -19,6 +20,13 @@ struct AdvancedSection: View {
     @State private var newUserWord = ""
     @State private var userDictionaryWords: [String] = []
     @State private var showUserDictionaryList = false
+    
+    // Import/Export states for user dictionary
+    @State private var showUserDictImportSheet = false
+    @State private var showUserDictExportSheet = false
+    @State private var showUserDictAlert = false
+    @State private var userDictAlertMessage = ""
+    @State private var userDictAlertIsError = false
     
     var body: some View {
         ScrollView {
@@ -404,12 +412,31 @@ struct AdvancedSection: View {
     
     private var userDictionarySection: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // Header with Import/Export buttons
             HStack(spacing: 4) {
                 Image(systemName: "person.text.rectangle")
                     .foregroundColor(.blue)
                 Text("Từ điển cá nhân")
                     .font(.caption)
                     .fontWeight(.medium)
+                
+                Spacer()
+                
+                // Import/Export buttons
+                HStack(spacing: 8) {
+                    Button(action: { showUserDictImportSheet = true }) {
+                        Label("Import", systemImage: "square.and.arrow.down")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    
+                    Button(action: exportUserDictionary) {
+                        Label("Export", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(userDictionaryWords.isEmpty)
+                }
             }
             
             Text("Thêm các từ bạn muốn bỏ qua kiểm tra chính tả")
@@ -489,6 +516,26 @@ struct AdvancedSection: View {
         .onAppear {
             loadUserDictionaryWords()
         }
+        .fileImporter(
+            isPresented: $showUserDictImportSheet,
+            allowedContentTypes: [.plainText],
+            allowsMultipleSelection: false
+        ) { result in
+            handleUserDictImportResult(result)
+        }
+        .fileExporter(
+            isPresented: $showUserDictExportSheet,
+            document: UserDictionaryDocument(words: userDictionaryWords),
+            contentType: .plainText,
+            defaultFilename: "xkey_user_dictionary.txt"
+        ) { result in
+            handleUserDictExportResult(result)
+        }
+        .alert(userDictAlertIsError ? "Lỗi" : "Thành công", isPresented: $showUserDictAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(userDictAlertMessage)
+        }
     }
 
     // MARK: - Computed Properties (moved from SpellCheckSection)
@@ -556,5 +603,121 @@ struct AdvancedSection: View {
     private func removeUserWord(_ word: String) {
         SharedSettings.shared.removeUserDictionaryWord(word)
         loadUserDictionaryWords()
+    }
+    
+    // MARK: - User Dictionary Import/Export
+    
+    private func exportUserDictionary() {
+        guard !userDictionaryWords.isEmpty else { return }
+        showUserDictExportSheet = true
+    }
+    
+    private func handleUserDictExportResult(_ result: Result<URL, Error>) {
+        switch result {
+        case .success(_):
+            userDictAlertMessage = "Đã xuất \(userDictionaryWords.count) từ thành công"
+            userDictAlertIsError = false
+            showUserDictAlert = true
+        case .failure(let error):
+            // User cancelled - don't show error
+            if (error as NSError).code == NSUserCancelledError {
+                return
+            }
+            userDictAlertMessage = "Lỗi khi lưu file: \(error.localizedDescription)"
+            userDictAlertIsError = true
+            showUserDictAlert = true
+        }
+    }
+    
+    private func handleUserDictImportResult(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            importUserDictionary(from: url)
+        case .failure(let error):
+            userDictAlertMessage = "Lỗi khi chọn file: \(error.localizedDescription)"
+            userDictAlertIsError = true
+            showUserDictAlert = true
+        }
+    }
+    
+    private func importUserDictionary(from url: URL) {
+        do {
+            // Start accessing security-scoped resource
+            guard url.startAccessingSecurityScopedResource() else {
+                userDictAlertMessage = "Không có quyền truy cập file"
+                userDictAlertIsError = true
+                showUserDictAlert = true
+                return
+            }
+            defer { url.stopAccessingSecurityScopedResource() }
+            
+            let content = try String(contentsOf: url, encoding: .utf8)
+            
+            // Split by newlines and filter out empty lines
+            let lines = content.components(separatedBy: .newlines)
+            let importedWords = lines
+                .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                .filter { !$0.isEmpty }
+            
+            guard !importedWords.isEmpty else {
+                userDictAlertMessage = "File không chứa từ nào"
+                userDictAlertIsError = true
+                showUserDictAlert = true
+                return
+            }
+            
+            // Add imported words
+            var importedCount = 0
+            for word in importedWords {
+                // Skip words with spaces (only single words allowed)
+                if !word.contains(" ") {
+                    SharedSettings.shared.addUserDictionaryWord(word)
+                    importedCount += 1
+                }
+            }
+            
+            loadUserDictionaryWords()
+            
+            userDictAlertMessage = "Đã import \(importedCount) từ thành công"
+            userDictAlertIsError = false
+            showUserDictAlert = true
+            
+        } catch {
+            userDictAlertMessage = "Lỗi: \(error.localizedDescription)"
+            userDictAlertIsError = true
+            showUserDictAlert = true
+        }
+    }
+}
+
+// MARK: - User Dictionary Document for FileExporter
+
+struct UserDictionaryDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.plainText] }
+    
+    var words: [String]
+    
+    init(words: [String]) {
+        self.words = words
+    }
+    
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents,
+              let content = String(data: data, encoding: .utf8) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        
+        words = content.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            .filter { !$0.isEmpty }
+    }
+    
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        let content = words.sorted().joined(separator: "\n")
+        guard let data = content.data(using: .utf8) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        return .init(regularFileWithContents: data)
     }
 }

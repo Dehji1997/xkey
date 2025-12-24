@@ -279,15 +279,28 @@ class XKeyIMController: IMKInputController {
             }
 
         case 0x31: // Space
-            // Process space as word break
-            let result = engine.processWordBreak(character: " ")
-            if result.shouldConsume {
-                handleResult(result, client: client)
+            // IMPORTANT: Check if we have composing text or tracked word length before processing word break
+            // If both are empty/zero, it means:
+            // 1. User just started typing, OR
+            // 2. Editor autocompleted characters (e.g., ":d" → emoji)
+            // In both cases, we should NOT process word break with spell check
+            // because it would restore/delete the autocompleted text
+            if !composingText.isEmpty || currentWordLength > 0 {
+                // We have composing text or tracked word - process space as word break
+                let result = engine.processWordBreak(character: " ")
+                if result.shouldConsume {
+                    handleResult(result, client: client)
+                }
+                commitComposition(client)
+                engine.reset()
+                currentWordLength = 0
+                markedTextStartLocation = NSNotFound
+            } else {
+                // No composing text or tracked word - just reset engine and let space pass through
+                // This prevents restoring autocompleted text (like emojis)
+                engine.reset()
+                currentWordLength = 0
             }
-            commitComposition(client)
-            engine.reset()
-            currentWordLength = 0
-            markedTextStartLocation = NSNotFound
             return false // Let space pass through
             
         default:
@@ -329,6 +342,12 @@ class XKeyIMController: IMKInputController {
                 engine.reset()
                 currentWordLength = 0
                 markedTextStartLocation = NSNotFound
+            } else {
+                // Even if no composing text, reset engine to clear buffer
+                // This prevents spell check from restoring when user types special chars
+                // Example: ":d" autocompletes to emoji, then Space should not restore
+                engine.reset()
+                currentWordLength = 0
             }
             return false
         }

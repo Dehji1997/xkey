@@ -404,29 +404,42 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         let isEnglishModeWithMacro = !isVietnameseEnabled && macroEnabled && macroInEnglishMode
 
         if isWordBreakKey(character) {
-            let result = engine.processWordBreak(character: character)
-            
-            // Check if macro was found and replaced, or restore happened
-            if result.shouldConsume {
-                // Send backspaces
-                if result.backspaceCount > 0 {
-                    injector.sendBackspaces(
-                        count: result.backspaceCount,
-                        codeTable: codeTable,
-                        proxy: proxy,
-                        fixAutocomplete: engine.settings.fixAutocomplete
-                    )
-                }
+            // IMPORTANT: Check if engine has buffer before processing word break
+            // If engine buffer is empty (index == 0), it means:
+            // 1. User just started typing, OR
+            // 2. Editor autocompleted characters (e.g., ":d" → emoji)
+            // In both cases, we should NOT process word break with spell check
+            // because it would restore/delete the autocompleted text
+            if engine.index > 0 {
+                // Engine has buffer - process word break normally
+                let result = engine.processWordBreak(character: character)
                 
-                // Send replacement characters (includes the space character for restore/macro)
-                if !result.newCharacters.isEmpty {
-                    injector.sendCharacters(result.newCharacters, codeTable: codeTable, proxy: proxy)
+                // Check if macro was found and replaced, or restore happened
+                if result.shouldConsume {
+                    // Send backspaces
+                    if result.backspaceCount > 0 {
+                        injector.sendBackspaces(
+                            count: result.backspaceCount,
+                            codeTable: codeTable,
+                            proxy: proxy,
+                            fixAutocomplete: engine.settings.fixAutocomplete
+                        )
+                    }
+                    
+                    // Send replacement characters (includes the space character for restore/macro)
+                    if !result.newCharacters.isEmpty {
+                        injector.sendCharacters(result.newCharacters, codeTable: codeTable, proxy: proxy)
+                    }
+                    
+                    // IMPORTANT: When restore or macro replacement happens, the space character
+                    // is already included in result.newCharacters. We must consume the event
+                    // to prevent a double space from being inserted.
+                    return nil
                 }
-                
-                // IMPORTANT: When restore or macro replacement happens, the space character
-                // is already included in result.newCharacters. We must consume the event
-                // to prevent a double space from being inserted.
-                return nil
+            } else {
+                // No buffer - just reset engine and let word break pass through
+                // This prevents restoring autocompleted text (like emojis)
+                engine.reset()
             }
             // NOTE: Do NOT reset mid-sentence flag on Enter/Return
             // When user presses Enter in the middle of text (e.g., line 2 of 3 lines),
@@ -473,7 +486,10 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
             return nil
         }
 
-        // Pass through
+
+        // Pass through - engine may have buffered this character
+        // If editor autocompletes it (e.g., \":d\" → emoji), the word break handler
+        // will check engine.index and skip processing to avoid deleting the autocompleted text
         return event
     }
     
