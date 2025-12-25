@@ -27,13 +27,16 @@ struct AdvancedSection: View {
     @State private var showUserDictAlert = false
     @State private var userDictAlertMessage = ""
     @State private var userDictAlertIsError = false
-    
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 SettingsGroup(title: "Chính tả & Viết hoa") {
                     VStack(alignment: .leading, spacing: 10) {
-                        Toggle("Kiểm tra chính tả", isOn: $viewModel.preferences.spellCheckEnabled)
+                        Toggle("Tự động viết hoa chữ đầu câu", isOn: $viewModel.preferences.upperCaseFirstChar)
+                        Toggle("Cho phép phụ âm Z, F, W, J", isOn: $viewModel.preferences.allowConsonantZFWJ)
+
+                        Toggle("Kiểm tra chính tả (Thử nghiệm)", isOn: $viewModel.preferences.spellCheckEnabled)
                             .onChange(of: viewModel.preferences.spellCheckEnabled) { newValue in
                                 if newValue {
                                     // Auto-load dictionary if available
@@ -45,10 +48,15 @@ struct AdvancedSection: View {
                                 }
                             }
                         
+                        Text("Cần xác nhận và tải về bộ từ điển Tiếng Việt bên dưới")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 20)
+                        
                         // Sub-options for spell check (only visible when spell check is enabled)
                         if viewModel.preferences.spellCheckEnabled {
                             VStack(alignment: .leading, spacing: 8) {
-                                Toggle("Khôi phục nếu sai chính tả (Thử nghiệm)", isOn: $viewModel.preferences.restoreIfWrongSpelling)
+                                Toggle("Khôi phục nếu sai chính tả", isOn: $viewModel.preferences.restoreIfWrongSpelling)
                                     .padding(.leading, 20)
                                     .onChange(of: viewModel.preferences.restoreIfWrongSpelling) { newValue in
                                         if !newValue {
@@ -69,10 +77,7 @@ struct AdvancedSection: View {
                                     }
                                 }
                             }
-                        }
-                        
-                        Toggle("Tự động viết hoa chữ đầu câu", isOn: $viewModel.preferences.upperCaseFirstChar)
-                        Toggle("Cho phép phụ âm Z, F, W, J", isOn: $viewModel.preferences.allowConsonantZFWJ)
+                        }                    
                         
                         // Dictionary options (only shown when spell check is enabled)
                         if viewModel.preferences.spellCheckEnabled {
@@ -108,7 +113,7 @@ struct AdvancedSection: View {
                                     Text("Từ điển chứa các từ đơn tiếng Việt.")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
-                                    Text("Từ điển được chia sẻ giữa XKey và XKeyIM.")
+                                    Text("XKey sẽ ưu tiên từ điển để xác định chính tả Tiếng Việt và tự động hoàn tác nếu từ đang gõ không tồn tại trong từ điển này. Bạn cũng có thể thêm các \"Từ điển cá nhân\" để bỏ qua việc kiểm tra chính tả đối với các từ mà bạn coi là hợp lệ.")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }

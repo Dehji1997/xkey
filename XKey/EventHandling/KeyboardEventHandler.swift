@@ -316,7 +316,7 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         ]
 
         if cursorMovementKeys.contains(keyCode) {
-            engine.reset()
+            engine.resetWithCursorMoved()  // Use new method that sets cursor moved flag
             injector.markNewSession(cursorMoved: true)  // Mark that cursor was moved
             return event
         }
@@ -404,14 +404,32 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         let isEnglishModeWithMacro = !isVietnameseEnabled && macroEnabled && macroInEnglishMode
 
         if isWordBreakKey(character) {
-            // IMPORTANT: Check if engine has buffer before processing word break
-            // If engine buffer is empty (index == 0), it means:
+            // IMPORTANT: Check if engine has buffer OR macroKey before processing word break
+            // If engine buffer is empty (index == 0) AND no macroKey, it means:
             // 1. User just started typing, OR
             // 2. Editor autocompleted characters (e.g., ":d" → emoji)
             // In both cases, we should NOT process word break with spell check
             // because it would restore/delete the autocompleted text
-            if engine.index > 0 {
-                // Engine has buffer - process word break normally
+            //
+            // HOWEVER, if macroKey has content (even with index == 0), we still need to
+            // call processWordBreak to trigger macro replacement. This happens when user
+            // types a macro ending with a special character like "you@" - after typing "@",
+            // the index is reset to 0 but macroKey still has [y, o, u, @].
+            //
+            // ALSO, if the character could be part of a macro (like "@", "!", etc.),
+            // we should call processWordBreak to add it to macroKey, even if buffer is empty.
+            // This supports macros starting with special characters like "@gmail" → "email@gmail.com".
+            let hasMacroKey = macroEnabled && !engine.hookState.macroKey.isEmpty
+            
+            // Check if this is a non-space character that could be part of a macro
+            // These characters should be added to macroKey via processWordBreak
+            let isMacroableChar = macroEnabled && character != " " && 
+                ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")", 
+                 "~", "`", "-", "_", "=", "+", "{", "}", "|", ":", "\"", 
+                 "<", ">", "?", ";", "'", ",", ".", "/", "\\", "[", "]"].contains(character)
+            
+            if engine.index > 0 || hasMacroKey || isMacroableChar {
+                // Engine has buffer OR pending macro OR macroable character - process word break
                 let result = engine.processWordBreak(character: character)
                 
                 // Check if macro was found and replaced, or restore happened
@@ -437,7 +455,8 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
                     return nil
                 }
             } else {
-                // No buffer - just reset engine and let word break pass through
+                // No buffer, no macroKey, and not a macroable character
+                // Just reset engine and let word break pass through
                 // This prevents restoring autocompleted text (like emojis)
                 engine.reset()
             }
@@ -610,8 +629,9 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
     
     /// Reset engine and mark that cursor was moved (by mouse click or arrow keys)
     /// This disables autocomplete fix to avoid deleting text on the right of cursor
+    /// Also sets engine flag to skip restore logic (user may be editing mid-word)
     func resetWithCursorMoved() {
-        engine.reset()
+        engine.resetWithCursorMoved()  // Use new method that sets cursor moved flag
         injector.markNewSession(cursorMoved: true)  // Mark that cursor was moved
         injector.clearMethodCache()  // Clear injection method cache
     }
@@ -620,7 +640,7 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
     /// Assumes user will likely click into middle of text, so enables mid-sentence mode
     /// This prevents Forward Delete from deleting text on the right of cursor
     func resetForAppSwitch() {
-        engine.reset()
+        engine.resetWithCursorMoved()  // Use new method that sets cursor moved flag
         injector.markNewSession(cursorMoved: true)  // Assume typing mid-sentence after app switch
         injector.clearMethodCache()
     }

@@ -93,6 +93,11 @@ class VNEngine {
     var hasHandleQuickConsonant = false
     var willTempOffEngine = false
     
+    /// Flag to track when cursor was moved by mouse click or arrow keys
+    /// When true, restore logic is skipped because engine doesn't have full context
+    /// of the word being edited (user may be editing middle of an existing word)
+    var cursorMovedSinceReset = false
+    
 
     
     // MARK: - Logging
@@ -233,13 +238,16 @@ class VNEngine {
         }
         
         // Check restore if wrong spelling
-        if vRestoreIfWrongSpelling == 1 && isWordBreak(keyCode: keyCode) {
+        // IMPORTANT: Skip restore if cursor was moved (editing mid-word)
+        if vRestoreIfWrongSpelling == 1 && isWordBreak(keyCode: keyCode) && !cursorMovedSinceReset {
             if !tempDisableKey && vCheckSpelling == 1 {
                 checkSpelling(forceCheckVowel: true)
             }
             if tempDisableKey {
                 checkRestoreIfWrongSpelling(handleCode: vRestoreAndStartNewSession)
             }
+        } else if cursorMovedSinceReset && isWordBreak(keyCode: keyCode) {
+            logCallback?("handleWordBreak: Skip restore because cursor was moved (editing mid-word)")
         }
         
         // Handle special char saving
@@ -309,12 +317,16 @@ class VNEngine {
         if (vQuickStartConsonant == 1 || vQuickEndConsonant == 1) && !tempDisableKey {
             checkQuickConsonant()
             spaceCount += 1
-        } else if vRestoreIfWrongSpelling == 1 && tempDisableKey && !hasHandledMacro {
+        } else if vRestoreIfWrongSpelling == 1 && tempDisableKey && !hasHandledMacro && !cursorMovedSinceReset {
+            // Skip restore if cursor was moved (editing mid-word)
             if !checkRestoreIfWrongSpelling(handleCode: vRestore) {
                 hookState.code = UInt8(vDoNothing)
             }
             spaceCount += 1
         } else {
+            if cursorMovedSinceReset {
+                logCallback?("handleSpace: Skip restore because cursor was moved (editing mid-word)")
+            }
             hookState.code = UInt8(vDoNothing)
             spaceCount += 1
         }
@@ -2276,6 +2288,16 @@ class VNEngine {
         spaceCount = 0
         vCheckSpelling = useSpellCheckingBefore ? 1 : 0
         willTempOffEngine = false
+        cursorMovedSinceReset = false  // Reset cursor moved flag
+    }
+    
+    /// Reset engine with cursor movement flag set
+    /// This indicates that user moved cursor (via mouse/arrow keys) and may be editing
+    /// in the middle of an existing word. Restore logic will be skipped in this case.
+    func resetWithCursorMoved() {
+        reset()
+        cursorMovedSinceReset = true
+        logCallback?("resetWithCursorMoved: cursor moved flag set")
     }
     
     /// Get current typing word as string (for debugging)
@@ -2474,7 +2496,9 @@ extension VNEngine {
         // Check spelling AFTER macro check (for restore if wrong spelling feature)
         // Only run if BOTH spell check AND restore if wrong spelling are enabled
         // AND no macro was found above
-        if isSpace && vCheckSpelling == 1 && vRestoreIfWrongSpelling == 1 {
+        // IMPORTANT: Skip restore if cursor was moved since reset (user may be editing
+        // middle of an existing word, and engine only sees partial word)
+        if isSpace && vCheckSpelling == 1 && vRestoreIfWrongSpelling == 1 && !cursorMovedSinceReset {
             // Re-check spelling with full vowel check
             if !tempDisableKey {
                 checkSpelling(forceCheckVowel: true)
@@ -2494,6 +2518,8 @@ extension VNEngine {
                     return result
                 }
             }
+        } else if cursorMovedSinceReset {
+            logCallback?("processWordBreak: Skip restore because cursor was moved (editing mid-word)")
         }
         
         // For non-space word break characters, add them to macroKey for building macros
