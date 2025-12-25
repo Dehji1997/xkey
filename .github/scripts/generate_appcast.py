@@ -147,6 +147,36 @@ def fetch_signature(signature_asset: Dict, token: Optional[str] = None) -> Optio
         print(f"Warning: Could not fetch signature: {e}", file=sys.stderr)
         return None
 
+def find_version_json_asset(assets: List[Dict]) -> Optional[Dict]:
+    """Find the version.json file in release assets"""
+    for asset in assets:
+        if asset['name'] == 'version.json':
+            return asset
+    return None
+
+def fetch_version_info(version_asset: Dict, token: Optional[str] = None) -> Optional[Dict]:
+    """Fetch version info from version.json asset"""
+    if not version_asset:
+        return None
+    
+    url = version_asset['browser_download_url']
+    headers = {
+        'User-Agent': 'XKey-Appcast-Generator'
+    }
+    
+    if token:
+        headers['Authorization'] = f'token {token}'
+    
+    req = urllib.request.Request(url, headers=headers)
+    
+    try:
+        with urllib.request.urlopen(req) as response:
+            content = response.read().decode().strip()
+            return json.loads(content)
+    except (urllib.error.HTTPError, json.JSONDecodeError) as e:
+        print(f"Warning: Could not fetch version.json: {e}", file=sys.stderr)
+        return None
+
 def format_rfc822_date(iso_date: str) -> str:
     """Convert ISO 8601 date to RFC 822 format"""
     dt = datetime.fromisoformat(iso_date.replace('Z', '+00:00'))
@@ -191,8 +221,26 @@ def generate_appcast_xml(repo: str, token: Optional[str] = None) -> str:
             print(f"Warning: No EdDSA signature found for release {release['tag_name']}", file=sys.stderr)
             print(f"         Update validation will fail without signature!", file=sys.stderr)
         
-        # Extract version from tag (remove 'v' prefix if present)
-        version = release['tag_name'].lstrip('v')
+        # Find and fetch version info from version.json
+        version_asset = find_version_json_asset(release.get('assets', []))
+        version_info = fetch_version_info(version_asset, token)
+        
+        # Extract version and build number
+        if version_info:
+            short_version = version_info.get('version', '')
+            build_number = version_info.get('build', '')
+            print(f"Found version.json: version={short_version}, build={build_number}", file=sys.stderr)
+        else:
+            # Fallback: extract from tag (old format: v1.2.14 or new format: v1.2.14-20251225.1)
+            tag = release['tag_name'].lstrip('v')
+            if '-' in tag:
+                parts = tag.split('-', 1)
+                short_version = parts[0]
+                build_number = parts[1]
+            else:
+                short_version = tag
+                build_number = tag  # Use version as build number for backward compatibility
+            print(f"No version.json, extracted from tag: version={short_version}, build={build_number}", file=sys.stderr)
         
         # Convert release notes markdown to HTML
         release_notes = release.get('body', '')
@@ -208,10 +256,12 @@ def generate_appcast_xml(repo: str, token: Optional[str] = None) -> str:
         formatted_date = format_rfc822_date(pub_date)
         
         # Build enclosure attributes
+        # sparkle:version is the build number (for update comparison)
+        # sparkle:shortVersionString is the display version
         enclosure_attrs = [
             f'url="{dmg_asset["browser_download_url"]}"',
-            f'sparkle:version="{version}"',
-            f'sparkle:shortVersionString="{version}"',
+            f'sparkle:version="{build_number}"',
+            f'sparkle:shortVersionString="{short_version}"',
             f'length="{dmg_asset["size"]}"',
             'type="application/octet-stream"',
         ]
@@ -225,10 +275,10 @@ def generate_appcast_xml(repo: str, token: Optional[str] = None) -> str:
         # Add item
         xml_lines.extend([
             '    <item>',
-            f'      <title>Version {version}</title>',
+            f'      <title>Version {short_version} (Build {build_number})</title>',
             f'      <link>{release_url}</link>',
-            f'      <sparkle:version>{version}</sparkle:version>',
-            f'      <sparkle:shortVersionString>{version}</sparkle:shortVersionString>',
+            f'      <sparkle:version>{build_number}</sparkle:version>',
+            f'      <sparkle:shortVersionString>{short_version}</sparkle:shortVersionString>',
             f'      <description><![CDATA[',
             f'        {release_notes_html}',
             f'      ]]></description>',

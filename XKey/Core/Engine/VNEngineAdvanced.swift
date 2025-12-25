@@ -194,14 +194,14 @@ extension VNEngine {
         guard tempDisableKey else { return false }
         guard index > 0 else { return false }
         
-        // IMPORTANT: Do not restore very short words (1-2 characters)
-        // These are often part of emoji autocomplete sequences (e.g., ":d" → 😃)
-        // or other special character sequences that editors autocomplete.
-        // Restoring them would delete the autocompleted content.
-        // Example: User types ":d", editor autocompletes to emoji, then Space is pressed.
-        // If we restore "d", we'll delete the emoji.
-        if index <= 2 {
-            logCallback?("Restore Wrong Spelling: Skipping restore for short word (length=\(index))")
+        // IMPORTANT: Detect emoji autocomplete patterns and skip restore for them.
+        // Emoji shortcuts often use special characters like `:d` → 😃 or `;)` → 😉
+        // But we SHOULD restore short Vietnamese words like "fĩ", "ío", "đi", "là"
+        // 
+        // Strategy: Skip restore only if we detect special character patterns,
+        // not just based on word length.
+        if shouldSkipRestoreForSpecialPattern() {
+            logCallback?("Restore Wrong Spelling: Skipping restore for special pattern (likely emoji autocomplete)")
             return false
         }
         
@@ -241,5 +241,37 @@ extension VNEngine {
         }
         
         return true
+    }
+    
+    // MARK: - Special Pattern Detection
+    
+    /// Check if current buffer looks like an emoji autocomplete pattern
+    /// Returns true if we should skip restore (likely an emoji shortcut)
+    /// Returns false if it looks like a normal Vietnamese word
+    private func shouldSkipRestoreForSpecialPattern() -> Bool {
+        guard stateIndex > 0 else { return false }
+        
+        // Skip restore for single character - never a valid Vietnamese word
+        // This also prevents conflicts with emoji autocomplete like `:d` → 😀
+        // When user types `:d`, the `:` is processed as word break, so keyStates only has `d`.
+        // If we restore `d`, we'll accidentally delete the emoji that Zalo/Slack autocompleted.
+        if index == 1 {
+            logCallback?("Special Pattern: Single character, skipping restore")
+            return true
+        }
+        
+        // Simple logic: If first character is NOT a letter, skip restore
+        // Emoji shortcuts typically start with special characters like `:`, `;`, `<`, etc.
+        // Vietnamese words always start with letters (a-z, A-Z)
+        let firstKeyData = keyStates[0]
+        let firstKeyCode = UInt16(firstKeyData & VNEngine.CHAR_MASK)
+        
+        if !vietnameseData.isLetter(firstKeyCode) {
+            logCallback?("Special Pattern: First char is not a letter (keyCode=\(firstKeyCode)), skipping restore")
+            return true
+        }
+        
+        // First char is a letter, allow restore
+        return false
     }
 }

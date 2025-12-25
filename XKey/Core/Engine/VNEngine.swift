@@ -1037,6 +1037,16 @@ class VNEngine {
     func insertKey(keyCode: UInt16, isCaps: Bool, isCheckSpelling: Bool = true) {
         let charDisplay = Self.keyCodeToChar(keyCode).map { " '\($0)'" } ?? ""
         logCallback?("insertKey: keyCode=\(keyCode)\(charDisplay), isCaps=\(isCaps), currentIndex=\(index)")
+        
+        // IMPORTANT: If starting a new word (index was 0), reset cursorMovedSinceReset
+        // This ensures spell check works correctly when user clicks into a text field
+        // and starts typing a new word from scratch.
+        // The flag should only remain true when user is editing in the middle of an existing word.
+        if index == 0 && cursorMovedSinceReset {
+            cursorMovedSinceReset = false
+            logCallback?("insertKey: Reset cursorMovedSinceReset (starting new word)")
+        }
+        
         if index >= VNEngine.MAX_BUFF {
             longWordHelper.append(typingWord[0])
             // Left shift

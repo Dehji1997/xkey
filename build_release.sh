@@ -607,12 +607,14 @@ if [ "$ENABLE_GITHUB_RELEASE" = true ]; then
         exit 1
     fi
 
-    # Get current version from Info.plist
+    # Get current version and build number from Info.plist
     CURRENT_VERSION=$(defaults read "$(pwd)/XKey/Info.plist" CFBundleShortVersionString)
-    RELEASE_TAG="v$CURRENT_VERSION"
+    BUILD_NUMBER=$(defaults read "$(pwd)/XKey/Info.plist" CFBundleVersion)
+    RELEASE_TAG="v$CURRENT_VERSION-$BUILD_NUMBER"
 
     echo "📋 Release details:"
     echo "   Version: $CURRENT_VERSION"
+    echo "   Build: $BUILD_NUMBER"
     echo "   Tag: $RELEASE_TAG"
 
     # Check if release already exists
@@ -621,7 +623,7 @@ if [ "$ENABLE_GITHUB_RELEASE" = true ]; then
         echo "   Options:"
         echo "   1. Delete existing release: gh release delete $RELEASE_TAG"
         echo "   2. Skip auto-release: ENABLE_GITHUB_RELEASE=false"
-        echo "   3. Update version in XKey/Info.plist"
+        echo "   3. Update CFBundleVersion in XKey/Info.plist"
         exit 1
     fi
 
@@ -667,22 +669,33 @@ if [ "$ENABLE_GITHUB_RELEASE" = true ]; then
     cat "$RELEASE_NOTES_FILE"
     echo ""
 
+    # Create version.json with version info for appcast generation
+    echo "📝 Creating version.json..."
+    cat > "Release/version.json" << EOF
+{
+    "version": "$CURRENT_VERSION",
+    "build": "$BUILD_NUMBER",
+    "tag": "$RELEASE_TAG"
+}
+EOF
+    echo "✅ version.json created"
+
     # Create release with assets
     echo "📤 Creating GitHub release..."
 
-    UPLOAD_FILES="Release/$DMG_NAME"
+    UPLOAD_FILES="Release/$DMG_NAME Release/version.json"
 
     # Add signature file if available
     if [ -f "Release/signature.txt" ]; then
         UPLOAD_FILES="$UPLOAD_FILES Release/signature.txt"
-        echo "   Uploading: $DMG_NAME + signature.txt"
+        echo "   Uploading: $DMG_NAME + version.json + signature.txt"
     else
-        echo "   Uploading: $DMG_NAME only"
+        echo "   Uploading: $DMG_NAME + version.json"
     fi
 
     # Create release
     gh release create "$RELEASE_TAG" $UPLOAD_FILES \
-        --title "XKey v$CURRENT_VERSION" \
+        --title "XKey v$CURRENT_VERSION (Build $BUILD_NUMBER)" \
         --notes-file "$RELEASE_NOTES_FILE" \
         --repo "$REPO_URL"
 
@@ -691,7 +704,7 @@ if [ "$ENABLE_GITHUB_RELEASE" = true ]; then
         echo "   URL: $REPO_URL/releases/tag/$RELEASE_TAG"
         echo ""
         echo "🔄 GitHub Actions will now:"
-        echo "   1. Generate appcast.json from releases"
+        echo "   1. Generate appcast.xml from releases"
         echo "   2. Deploy to GitHub Pages"
         echo "   3. Enable auto-update for users"
         echo ""
@@ -703,6 +716,7 @@ if [ "$ENABLE_GITHUB_RELEASE" = true ]; then
 
     # Clean up
     rm -f "$RELEASE_NOTES_FILE"
+    rm -f "Release/version.json"
 fi
 
 
@@ -762,10 +776,13 @@ if [ "$ENABLE_SPARKLE_SIGN" = true ] && [ -n "$SPARKLE_SIGNATURE" ]; then
 fi
 
 if [ "$ENABLE_GITHUB_RELEASE" = true ]; then
-    CURRENT_VERSION=$(defaults read "$(pwd)/XKey/Info.plist" CFBundleShortVersionString)
+    DISPLAY_VERSION=$(defaults read "$(pwd)/XKey/Info.plist" CFBundleShortVersionString)
+    DISPLAY_BUILD=$(defaults read "$(pwd)/XKey/Info.plist" CFBundleVersion)
     echo "🚀 GitHub Release: CREATED"
-    echo "   Tag: v$CURRENT_VERSION"
-    echo "   URL: $REPO_URL/releases/tag/v$CURRENT_VERSION"
+    echo "   Version: $DISPLAY_VERSION"
+    echo "   Build: $DISPLAY_BUILD"
+    echo "   Tag: v$DISPLAY_VERSION-$DISPLAY_BUILD"
+    echo "   URL: $REPO_URL/releases/tag/v$DISPLAY_VERSION-$DISPLAY_BUILD"
 fi
 
 echo ""
@@ -790,17 +807,21 @@ echo "   (Or it will be retrieved from Keychain automatically)"
 if [ "$ENABLE_GITHUB_RELEASE" != true ]; then
     echo ""
     echo "📋 Next steps for manual release:"
-    CURRENT_VERSION=$(defaults read "$(pwd)/XKey/Info.plist" CFBundleShortVersionString)
-    echo "   1. Create GitHub Release (include signature.txt for auto-update):"
-    echo "      gh release create v$CURRENT_VERSION Release/XKey.dmg Release/signature.txt \\"
-    echo "         --title \"XKey v$CURRENT_VERSION\" \\"
+    DISPLAY_VERSION=$(defaults read "$(pwd)/XKey/Info.plist" CFBundleShortVersionString)
+    DISPLAY_BUILD=$(defaults read "$(pwd)/XKey/Info.plist" CFBundleVersion)
+    echo "   1. Create GitHub Release (include version.json + signature.txt for auto-update):"
+    echo "      # Create version.json first:"
+    echo "      echo '{\"version\": \"$DISPLAY_VERSION\", \"build\": \"$DISPLAY_BUILD\"}' > Release/version.json"
+    echo ""
+    echo "      gh release create v$DISPLAY_VERSION-$DISPLAY_BUILD Release/XKey.dmg Release/version.json Release/signature.txt \\"
+    echo "         --title \"XKey v$DISPLAY_VERSION (Build $DISPLAY_BUILD)\" \\"
     echo "         --notes \"Your release notes here\""
     echo ""
     echo "   2. Or enable automatic release:"
     echo "      ENABLE_GITHUB_RELEASE=true ./build_release.sh"
     echo ""
     echo "   3. GitHub Actions will automatically:"
-    echo "      - Generate appcast.json with EdDSA signature"
+    echo "      - Generate appcast.xml with EdDSA signature"
     echo "      - Deploy to GitHub Pages for Sparkle auto-updates"
     echo "      - Users will receive update notification"
     echo ""
