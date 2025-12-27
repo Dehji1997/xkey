@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 /// Extension for VNEngine to support spell checking
 extension VNEngine {
@@ -56,8 +57,31 @@ extension VNEngine {
         
         let isValid = VNDictionaryManager.shared.isValidWord(currentWord, style: style)
         logCallback?("📖 Dictionary check: word='\(currentWord)', style=\(styleName), valid=\(isValid)")
-        
-        return isValid
+
+        if isValid {
+            return true
+        }
+
+        // If not found in dictionary, use Natural Language framework as fallback
+        let nlValid = isValidWordUsingNaturalLanguage(currentWord)
+        logCallback?("📖 NaturalLanguage check: word='\(currentWord)', valid=\(nlValid)")
+
+        return nlValid
+    }
+
+    /// Check if word is valid using macOS Natural Language framework
+    /// This serves as a fallback when word is not found in the custom dictionary
+    private func isValidWordUsingNaturalLanguage(_ word: String) -> Bool {
+        // Use NLSpellChecker to check spelling
+        let checker = NSSpellChecker.shared
+
+        // Check spelling for Vietnamese language
+        let range = checker.checkSpelling(of: word, startingAt: 0, language: "vi", wrap: false, inSpellDocumentWithTag: 0, wordCount: nil)
+
+        // If range.location == NSNotFound, the word is correctly spelled
+        let isCorrect = range.location == NSNotFound
+
+        return isCorrect
     }
 
     /// Get spell check suggestion status for the word
