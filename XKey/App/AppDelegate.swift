@@ -439,6 +439,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         keyboardHandler?.undoTypingEnabled = preferences.undoTypingEnabled
         debugWindowController?.logEvent(preferences.undoTypingEnabled ? "  ✅ Undo typing enabled (Esc key)" : "  ⏹️ Undo typing disabled")
 
+        // Log fix autocomplete setting
+        debugWindowController?.logEvent(preferences.fixAutocomplete ? "  ✅ Fix autocomplete enabled (Forward Delete)" : "  ⏹️ Fix autocomplete disabled")
+
         debugWindowController?.logEvent("✅ Preferences applied (including advanced features)")
     }
     

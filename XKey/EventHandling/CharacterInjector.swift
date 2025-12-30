@@ -109,23 +109,21 @@ class CharacterInjector {
         let charPreview = characters.map { $0.unicode(codeTable: codeTable) }.joined()
         debugCallback?("Inject: bs=\(backspaceCount), chars=\(characters.count), text=\"\(charPreview)\", method=\(method), textMode=\(textSendingMethod)")
 
-        // IMPORTANT: Disable autocomplete fix when typing in middle of sentence
-        let shouldFixAutocomplete = fixAutocomplete && !isTypingMidSentence
-        
         // Step 1: Send backspaces
         if backspaceCount > 0 {
             switch method {
             case .selection:
                 debugCallback?("    → Selection method: Shift+Left × \(backspaceCount)")
                 injectViaSelectionInternal(count: backspaceCount, delays: delays, proxy: proxy)
-                
+
             case .autocomplete:
                 debugCallback?("    → Autocomplete method: Forward Delete + backspaces")
                 injectViaAutocompleteInternal(count: backspaceCount, delays: delays, proxy: proxy)
-                
+
             case .slow, .fast:
                 debugCallback?("    → Backspace method: delays=\(delays), directPost=\(useDirectPost)")
-                if shouldFixAutocomplete {
+                // Use smart Forward Delete detection: checks AX API for text after cursor
+                if shouldSendForwardDelete(fixAutocomplete: fixAutocomplete) {
                     sendForwardDelete(proxy: proxy)
                     usleep(3000)
                 }
@@ -299,48 +297,44 @@ class CharacterInjector {
     /// Synchronized with semaphore to prevent race conditions
     func sendBackspaces(count: Int, codeTable: CodeTable, proxy: CGEventTapProxy, fixAutocomplete: Bool = false) {
         guard count > 0 else { return }
-        
+
         // Begin synchronized injection
         beginInjection()
         defer { endInjection() }
-        
+
         // Detect injection method for current app
         let methodInfo = detectInjectionMethod()
         let method = methodInfo.method
         let delays = methodInfo.delays
-        
+
         debugCallback?("sendBackspaces: count=\(count), method=\(method), fixAutocomplete=\(fixAutocomplete), isTypingMidSentence=\(isTypingMidSentence)")
-        
-        // IMPORTANT: Disable autocomplete fix when typing in middle of sentence
-        // Forward Delete would delete text to the right of cursor, which is wrong!
-        let shouldFixAutocomplete = fixAutocomplete && !isTypingMidSentence
-        
+
+        // Use smart Forward Delete detection
+        let shouldDoForwardDelete = shouldSendForwardDelete(fixAutocomplete: fixAutocomplete)
+
         switch method {
         case .selection:
             // Selection method: Shift+Left to select, then type replacement
             debugCallback?("    → Selection method: Shift+Left × \(count)")
             injectViaSelection(count: count, delays: delays, proxy: proxy)
-            
+
         case .autocomplete:
             // Autocomplete method: Forward Delete to clear suggestion, then backspaces
             debugCallback?("    → Autocomplete method: Forward Delete + backspaces")
             injectViaAutocomplete(count: count, delays: delays, proxy: proxy)
-            
+
         case .slow:
             // Slow method for Terminal/JetBrains: higher delays between keystrokes
             debugCallback?("    → Slow method (Terminal/IDE): delays=\(delays)")
-            injectViaBackspace(count: count, codeTable: codeTable, delays: delays, proxy: proxy, fixAutocomplete: shouldFixAutocomplete)
-            
+            injectViaBackspace(count: count, codeTable: codeTable, delays: delays, proxy: proxy, fixAutocomplete: shouldDoForwardDelete)
+
         case .fast:
             // Fast method: minimal delays
-            if shouldFixAutocomplete {
+            if shouldDoForwardDelete {
                 debugCallback?("    → Fast method with autocomplete fix")
                 sendForwardDelete(proxy: proxy)
                 usleep(3000)
                 injectViaBackspace(count: count, codeTable: codeTable, delays: delays, proxy: proxy, fixAutocomplete: false)
-            } else if isTypingMidSentence {
-                debugCallback?("    → Fast method (mid-sentence)")
-                injectViaBackspace(count: count, codeTable: codeTable, delays: (delays.backspace, delays.wait, delays.text), proxy: proxy, fixAutocomplete: false)
             } else {
                 debugCallback?("    → Fast method (normal)")
                 injectViaBackspace(count: count, codeTable: codeTable, delays: delays, proxy: proxy, fixAutocomplete: false)
@@ -509,6 +503,83 @@ class CharacterInjector {
     /// Get length of text before cursor using Accessibility API
     private func getTextLengthBeforeCursor() -> Int? {
         return getTextBeforeCursor()?.count
+    }
+
+    /// Check if there is text after cursor using Accessibility API
+    /// Returns: true if there's text after cursor, false if at end of text, nil if AX not supported
+    private func hasTextAfterCursor() -> Bool? {
+        let systemWideElement = AXUIElementCreateSystemWide()
+
+        var focusedElement: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(systemWideElement, kAXFocusedUIElementAttribute as CFString, &focusedElement) == .success else {
+            debugCallback?("  [AX] hasTextAfterCursor: Failed to get focused element")
+            return nil  // AX not supported
+        }
+
+        let element = focusedElement as! AXUIElement
+
+        // Get selected text range (cursor position)
+        var selectedRange: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &selectedRange) == .success else {
+            debugCallback?("  [AX] hasTextAfterCursor: Failed to get selected range")
+            return nil  // AX not supported
+        }
+
+        // Extract cursor position
+        var rangeValue = CFRange(location: 0, length: 0)
+        guard AXValueGetValue(selectedRange as! AXValue, .cfRange, &rangeValue) else {
+            debugCallback?("  [AX] hasTextAfterCursor: Failed to extract range value")
+            return nil  // AX not supported
+        }
+
+        let cursorPosition = rangeValue.location
+
+        // Get total text length
+        var numberOfCharacters: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXNumberOfCharactersAttribute as CFString, &numberOfCharacters) == .success,
+              let totalLength = numberOfCharacters as? Int else {
+            debugCallback?("  [AX] hasTextAfterCursor: Failed to get total length")
+            return nil  // AX not supported
+        }
+
+        let hasTextAfter = cursorPosition < totalLength
+        debugCallback?("  [AX] hasTextAfterCursor: cursor=\(cursorPosition), total=\(totalLength), hasTextAfter=\(hasTextAfter)")
+
+        return hasTextAfter
+    }
+
+    /// Determine if Forward Delete should be sent for autocomplete fix
+    /// Only sends Forward Delete if:
+    /// 1. fixAutocomplete setting is enabled
+    /// 2. Not typing mid-sentence (based on cursor movement tracking)
+    /// 3. AX API confirms no text after cursor, OR AX not supported (fallback to allow)
+    private func shouldSendForwardDelete(fixAutocomplete: Bool) -> Bool {
+        // Must have fixAutocomplete enabled
+        guard fixAutocomplete else {
+            return false
+        }
+
+        // Don't send if we know cursor was moved (typing mid-sentence)
+        if isTypingMidSentence {
+            debugCallback?("  [FwdDel] Skipped: isTypingMidSentence=true")
+            return false
+        }
+
+        // Check via Accessibility API if there's text after cursor
+        if let hasTextAfter = hasTextAfterCursor() {
+            if hasTextAfter {
+                debugCallback?("  [FwdDel] Skipped: AX detected text after cursor")
+                return false
+            } else {
+                debugCallback?("  [FwdDel] Allowed: AX confirmed no text after cursor")
+                return true
+            }
+        }
+
+        // AX not supported - fallback to allow Forward Delete
+        // This handles Spotlight, Raycast, Alfred, etc. that don't support AX
+        debugCallback?("  [FwdDel] Allowed: AX not supported (fallback)")
+        return true
     }
 
     /// Send a string of characters (legacy method, sends one char at a time)

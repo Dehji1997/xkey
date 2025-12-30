@@ -262,7 +262,9 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         if event.isCommandPressed {
             engine.reset()
             // Cmd + Arrow keys move cursor, so mark as mid-sentence
-            // This prevents Forward Delete from deleting text on the right
+            // For other Cmd shortcuts, Forward Delete protection is handled by
+            // CharacterInjector.shouldSendForwardDelete() which uses AX API to
+            // check if there's text after cursor before sending Forward Delete
             let keyCode = event.keyCode
             let cursorMovementKeys: [CGKeyCode] = [0x7B, 0x7C, 0x7D, 0x7E, 0x73, 0x77, 0x74, 0x79] // Arrow keys, Home, End, Page Up/Down
             let isCursorMovement = cursorMovementKeys.contains(keyCode)

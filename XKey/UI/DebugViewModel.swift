@@ -97,11 +97,12 @@ class DebugViewModel: ObservableObject {
     
     private func initializeLogFile() {
         let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .medium)
-        let header = "=== XKey Debug Log ===\nStarted: \(timestamp)\nLog file: \(logFileURL.path)\n\n"
-        
+        let versionString = "XKey v\(AppVersion.current) (\(AppVersion.build))"
+        let header = "=== XKey Debug Log ===\n\(versionString)\nStarted: \(timestamp)\nLog file: \(logFileURL.path)\n\n"
+
         // Create/overwrite file with header
         try? header.write(to: logFileURL, atomically: true, encoding: .utf8)
-        
+
         writeToFileAsync("Debug window initialized")
         writeToFileAsync("Using file-based logging for better performance")
     }

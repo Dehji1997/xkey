@@ -23,12 +23,13 @@ extension String {
         }
         
         // ============================================
-        // RULE 1: Contains f, j, w, z
+        // RULE 1: Contains f, j, z (NOT 'w' - it's used in Telex)
         // ============================================
         // Almost certainly not pure Vietnamese
-        // Note: Some Vietnamese words use these with vAllowConsonantZFWJ,
+        // NOTE: 'w' is EXCLUDED because in Telex, it's a vowel modifier (a+w=ă, o+w=ơ, u+w=ư)
+        // Note: Some Vietnamese words use f, j, z with vAllowConsonantZFWJ,
         // but they're rare and mostly loan words
-        if word.rangeOfCharacter(from: CharacterSet(charactersIn: "fjwz")) != nil {
+        if word.rangeOfCharacter(from: CharacterSet(charactersIn: "fjz")) != nil {
             return true
         }
         
@@ -264,12 +265,15 @@ extension String {
         }
         
         // ============================================
-        // RULE 1: Contains f, j, w, z
+        // RULE 1: Contains f, j, z (NOT 'w' - it's used in Telex)
         // ============================================
         // These characters don't exist in native Vietnamese words
+        // NOTE: 'w' is EXCLUDED because in Telex, it's a vowel modifier:
+        // - a+w = ă, o+w = ơ, u+w = ư
+        // - So "bawf" = "bằ", not English
         // Check only in the START and MIDDLE (not the last character which could be mark key)
         let wordWithoutLast = word.count > 1 ? String(word.dropLast()) : word
-        if wordWithoutLast.rangeOfCharacter(from: CharacterSet(charactersIn: "fjwz")) != nil {
+        if wordWithoutLast.rangeOfCharacter(from: CharacterSet(charactersIn: "fjz")) != nil {
             return true
         }
         
