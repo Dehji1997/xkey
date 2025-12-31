@@ -45,6 +45,7 @@ struct Preferences: Codable {
     var allowConsonantZFWJ: Bool = false         // Allow Z, F, W, J consonants
     var freeMarkEnabled: Bool = false            // Free mark placement (đặt dấu tự do)
     var tempOffToolbarEnabled: Bool = false      // Show floating toolbar for temp off controls
+    var tempOffToolbarHotkey: Hotkey = Hotkey(keyCode: 0x11, modifiers: [.command, .option])  // Default: Cmd+Option+T
     
     // Macro settings
     var macroEnabled: Bool = false               // Enable text shortcuts

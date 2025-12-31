@@ -24,11 +24,21 @@ private struct HotkeyPreset: Identifiable {
         HotkeyPreset(name: "⌥⇧ (Option+Shift)", hotkey: Hotkey(keyCode: 0, modifiers: [.option, .shift], isModifierOnly: true)),
         HotkeyPreset(name: "⌘⇧ (Cmd+Shift)", hotkey: Hotkey(keyCode: 0, modifiers: [.command, .shift], isModifierOnly: true)),
         
-        // Common key combinations
+        // Common key combinations (2+ modifiers)
+        HotkeyPreset(name: "⌘⌥T", hotkey: Hotkey(keyCode: 0x11, modifiers: [.command, .option], isModifierOnly: false)), // T = 0x11
         HotkeyPreset(name: "⌘⇧V", hotkey: Hotkey(keyCode: 9, modifiers: [.command, .shift], isModifierOnly: false)), // V = 9
         HotkeyPreset(name: "⌘⇧Z", hotkey: Hotkey(keyCode: 6, modifiers: [.command, .shift], isModifierOnly: false)), // Z = 6
         HotkeyPreset(name: "⌃⌥V", hotkey: Hotkey(keyCode: 9, modifiers: [.control, .option], isModifierOnly: false)),
+        HotkeyPreset(name: "⌃⌥T", hotkey: Hotkey(keyCode: 0x11, modifiers: [.control, .option], isModifierOnly: false)),
+        HotkeyPreset(name: "⌘⌃T", hotkey: Hotkey(keyCode: 0x11, modifiers: [.command, .control], isModifierOnly: false)),
     ]
+}
+
+// MARK: - Recording State Notification
+
+extension Notification.Name {
+    /// Posted when hotkey recording starts/stops. UserInfo contains "isRecording": Bool
+    static let hotkeyRecordingStateChanged = Notification.Name("XKey.hotkeyRecordingStateChanged")
 }
 
 struct HotkeyRecorderView: View {
@@ -39,54 +49,80 @@ struct HotkeyRecorderView: View {
     @State private var flagsChangedMonitor: Any?
     @State private var currentModifiers: NSEvent.ModifierFlags = []
     @State private var modifierPressTime: Date?
+    @State private var showMinimumWarning = false
+    
+    /// Minimum number of modifiers required (e.g., 2 for toolbar hotkey to avoid Ctrl/Option conflicts)
+    var minimumModifiers: Int = 1
     
     var body: some View {
-        HStack(spacing: 8) {
-            // Display field - clickable to start recording
-            Button(action: {
-                if !isRecording {
-                    startRecording()
-                }
-            }) {
-                HStack {
-                    Spacer()
-                    Text(displayText.isEmpty ? "Nhấn để ghi phím tắt..." : displayText)
-                        .foregroundColor(isRecording ? .red : .primary)
-                    Spacer()
-                }
-                .frame(height: 30)
-                .background(Color(nsColor: .textBackgroundColor))
-                .cornerRadius(6)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(isRecording ? Color.red : Color.gray.opacity(0.3), lineWidth: 2)
-                )
-            }
-            .buttonStyle(.plain)
-            .help(isRecording ? "Nhấn phím tắt hoặc giữ modifier keys 0.5s..." : "Nhấn để ghi phím tắt")
-            
-            // Preset menu - allows selecting common hotkeys that may be hard to record
-            Menu {
-                ForEach(HotkeyPreset.presets) { preset in
-                    Button(preset.name) {
-                        selectPreset(preset)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                // Display field - clickable to start recording
+                Button(action: {
+                    if !isRecording {
+                        startRecording()
                     }
+                }) {
+                    HStack {
+                        Spacer()
+                        Text(displayText.isEmpty ? "Nhấn để ghi phím tắt..." : displayText)
+                            .foregroundColor(isRecording ? .red : .primary)
+                        Spacer()
+                    }
+                    .frame(height: 30)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(isRecording ? Color.red : Color.gray.opacity(0.3), lineWidth: 2)
+                    )
                 }
-            } label: {
-                Image(systemName: "list.bullet")
-                    .foregroundColor(.secondary)
+                .buttonStyle(.plain)
+                .help(isRecording ? "Nhấn phím tắt hoặc giữ modifier keys 0.5s..." : "Nhấn để ghi phím tắt")
+                
+                // Preset menu - allows selecting common hotkeys that may be hard to record
+                Menu {
+                    ForEach(HotkeyPreset.presets.filter { preset in
+                        // Filter presets based on minimumModifiers
+                        if minimumModifiers >= 2 {
+                            // Only show presets with 2+ modifiers
+                            let modCount = [
+                                preset.hotkey.modifiers.contains(.control),
+                                preset.hotkey.modifiers.contains(.option),
+                                preset.hotkey.modifiers.contains(.shift),
+                                preset.hotkey.modifiers.contains(.command)
+                            ].filter { $0 }.count
+                            return modCount >= minimumModifiers && !preset.hotkey.isModifierOnly
+                        }
+                        return true
+                    }) { preset in
+                        Button(preset.name) {
+                            selectPreset(preset)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "list.bullet")
+                        .foregroundColor(.secondary)
+                }
+                .menuStyle(.borderlessButton)
+                .frame(width: 20)
+                .help("Chọn phím tắt có sẵn (hữu ích cho Ctrl+Space, Fn...)")
+                
+                // Clear button
+                Button(action: clearHotkey) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Xóa phím tắt")
             }
-            .menuStyle(.borderlessButton)
-            .frame(width: 20)
-            .help("Chọn phím tắt có sẵn (hữu ích cho Ctrl+Space, Fn...)")
             
-            // Clear button
-            Button(action: clearHotkey) {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.secondary)
+            // Warning message when minimum modifiers not met
+            if showMinimumWarning {
+                Text("⚠️ Yêu cầu tối thiểu \(minimumModifiers) modifier keys (Cmd, Option, Ctrl, Shift)")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
             }
-            .buttonStyle(.plain)
-            .help("Xóa phím tắt")
         }
         .onAppear {
             updateDisplay()
@@ -102,6 +138,7 @@ struct HotkeyRecorderView: View {
             stopRecording()
         }
         hotkey = preset.hotkey
+        showMinimumWarning = false
         updateDisplay()
     }
     
@@ -110,6 +147,14 @@ struct HotkeyRecorderView: View {
         displayText = "Nhấn phím tắt..."
         currentModifiers = []
         modifierPressTime = nil
+        showMinimumWarning = false
+        
+        // Notify that recording started (so EventTapManager can suspend hotkey processing)
+        NotificationCenter.default.post(
+            name: .hotkeyRecordingStateChanged,
+            object: nil,
+            userInfo: ["isRecording": true]
+        )
         
         // Monitor key down events (for regular hotkeys like Cmd+Shift+V)
         keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
@@ -125,6 +170,21 @@ struct HotkeyRecorderView: View {
                 return nil
             }
             
+            // Count modifiers
+            let modifierCount = [
+                modifiers.contains(.control),
+                modifiers.contains(.option),
+                modifiers.contains(.shift),
+                modifiers.contains(.command)
+            ].filter { $0 }.count
+            
+            // Check minimum modifiers requirement
+            if modifierCount < minimumModifiers {
+                showMinimumWarning = true
+                // Don't accept, keep recording
+                return nil
+            }
+            
             // Create new hotkey from pressed keys (regular hotkey with key)
             let newHotkey = Hotkey(
                 keyCode: event.keyCode,
@@ -133,6 +193,7 @@ struct HotkeyRecorderView: View {
             )
             
             hotkey = newHotkey
+            showMinimumWarning = false
             stopRecording()
             updateDisplay()
             
@@ -207,6 +268,13 @@ struct HotkeyRecorderView: View {
         isRecording = false
         currentModifiers = []
         modifierPressTime = nil
+        
+        // Notify that recording stopped (so EventTapManager can resume hotkey processing)
+        NotificationCenter.default.post(
+            name: .hotkeyRecordingStateChanged,
+            object: nil,
+            userInfo: ["isRecording": false]
+        )
         
         // Remove event monitors
         if let monitor = keyDownMonitor {

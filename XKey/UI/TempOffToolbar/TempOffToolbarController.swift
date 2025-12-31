@@ -23,10 +23,14 @@ class TempOffToolbarController {
     private var modifierMonitor: Any?  // Monitor for Ctrl/Option key
 
     /// Auto-hide delay in seconds (0 = never auto-hide)
-    var autoHideDelay: TimeInterval = 0
+    var autoHideDelay: TimeInterval = 3.0
 
     /// Callback when temp off states change
     var onStateChange: ((Bool, Bool) -> Void)?  // (spellingTempOff, engineTempOff)
+    
+    /// Saved mouse position at the time show() is called
+    /// This is used as fallback when cursor position cannot be obtained
+    private var savedMousePosition: NSPoint?
 
     // MARK: - Initialization
 
@@ -84,6 +88,11 @@ class TempOffToolbarController {
 
     /// Show the toolbar at the current cursor position
     func show() {
+        // Save mouse position immediately for fallback
+        // This captures the position at the moment show() is called,
+        // which is likely close to where user clicked/focused
+        savedMousePosition = NSEvent.mouseLocation
+        
         // Create panel if needed
         if panel == nil {
             panel = createPanel()
@@ -97,14 +106,8 @@ class TempOffToolbarController {
         // Resize panel based on visible buttons
         resizePanelForContent()
 
-        // Enable logging for this show
-        shouldLogPositioning = true
-
         // Position near cursor
         positionNearCursor()
-
-        // Disable logging for subsequent updates (timer-based)
-        shouldLogPositioning = false
 
         // Show panel
         panel.orderFront(nil)
@@ -126,6 +129,10 @@ class TempOffToolbarController {
 
     /// Toggle toolbar visibility
     func toggle() {
+        // Reset modifier state to prevent Ctrl/Option toggle from firing
+        // when user presses hotkey like ⌘⌥T
+        resetModifierState()
+        
         if panel?.isVisible == true {
             hide()
         } else {
@@ -148,6 +155,17 @@ class TempOffToolbarController {
 
     /// Track last modifier state to detect key press (not just holding)
     private var lastModifierFlags: NSEvent.ModifierFlags = []
+    
+    /// Track if Ctrl was pressed alone (for toggle on release)
+    private var ctrlPressedAlone = false
+    /// Track if Option was pressed alone (for toggle on release)
+    private var optionPressedAlone = false
+    /// Track if any key was pressed while holding modifier (cancels toggle)
+    private var keyPressedDuringModifier = false
+    /// Key monitor to detect key presses during modifier hold
+    private var keyDuringModifierMonitor: Any?
+    /// Timestamp of last hotkey toggle (for cooldown)
+    private var lastHotkeyToggleTime: Date?
 
     private func setupModifierMonitor() {
         // Remove existing monitor
@@ -158,6 +176,14 @@ class TempOffToolbarController {
         modifierMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
             self?.handleModifierChange(event)
         }
+        
+        // Also monitor key presses to cancel modifier toggle if user is typing a hotkey combo
+        keyDuringModifierMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] _ in
+            // Any key press during modifier hold cancels the toggle
+            self?.keyPressedDuringModifier = true
+            self?.ctrlPressedAlone = false
+            self?.optionPressedAlone = false
+        }
     }
 
     private func removeModifierMonitor() {
@@ -165,34 +191,97 @@ class TempOffToolbarController {
             NSEvent.removeMonitor(monitor)
             modifierMonitor = nil
         }
+        if let monitor = keyDuringModifierMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyDuringModifierMonitor = nil
+        }
+        resetModifierState()
+    }
+    
+    /// Reset modifier tracking state (call when hotkey toggles toolbar)
+    private func resetModifierState() {
         lastModifierFlags = []
+        ctrlPressedAlone = false
+        optionPressedAlone = false
+        keyPressedDuringModifier = true  // Assume key was pressed to prevent toggle
+        lastHotkeyToggleTime = Date()  // Set cooldown timestamp
     }
 
     private func handleModifierChange(_ event: NSEvent) {
         guard panel?.isVisible == true else { return }
+        
+        // Cooldown: Ignore modifier events for 500ms after hotkey toggle
+        // This prevents race conditions where Option release happens after ⌘⌥T
+        if let toggleTime = lastHotkeyToggleTime,
+           Date().timeIntervalSince(toggleTime) < 0.5 {
+            // Still in cooldown, just update state but don't trigger toggle
+            lastModifierFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            return
+        }
 
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
-        // Check for Ctrl key press (was not pressed, now pressed)
-        let ctrlWasPressed = !lastModifierFlags.contains(.control) && flags.contains(.control)
-        let optionWasPressed = !lastModifierFlags.contains(.option) && flags.contains(.option)
-
-        // Toggle spelling when Ctrl is pressed
-        if ctrlWasPressed {
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.viewModel.toggleSpelling()
-                logDebug("⌃ Ctrl pressed → Toggle spelling: \(self.viewModel.isSpellingTempOff ? "OFF" : "ON")", source: self.logSource)
+        // Check for Ctrl key state changes
+        let ctrlDown = flags.contains(.control)
+        let ctrlWasDown = lastModifierFlags.contains(.control)
+        
+        // Check for Option key state changes
+        let optionDown = flags.contains(.option)
+        let optionWasDown = lastModifierFlags.contains(.option)
+        
+        // Check if other modifiers are present (indicates hotkey combo, not single modifier)
+        let hasOtherModifiers = flags.contains(.command) || flags.contains(.shift)
+        
+        // --- CTRL KEY ---
+        // Pressed: Mark as pressed alone if no other modifiers
+        if ctrlDown && !ctrlWasDown {
+            if !hasOtherModifiers && !optionDown {
+                ctrlPressedAlone = true
+                keyPressedDuringModifier = false
+            } else {
+                ctrlPressedAlone = false
             }
         }
-
-        // Toggle engine when Option is pressed
-        if optionWasPressed {
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.viewModel.toggleEngine()
-                logDebug("⌥ Option pressed → Toggle engine: \(self.viewModel.isEngineTempOff ? "OFF" : "ON")", source: self.logSource)
+        // Released: Toggle if was pressed alone and no key was pressed during hold
+        if !ctrlDown && ctrlWasDown {
+            if ctrlPressedAlone && !keyPressedDuringModifier && !hasOtherModifiers {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.viewModel.toggleSpelling()
+                    
+                }
             }
+            ctrlPressedAlone = false
+        }
+        // Cancel if other modifiers are added while holding
+        if ctrlDown && hasOtherModifiers {
+            ctrlPressedAlone = false
+        }
+        
+        // --- OPTION KEY ---
+        // Pressed: Mark as pressed alone if no other modifiers
+        if optionDown && !optionWasDown {
+            if !hasOtherModifiers && !ctrlDown {
+                optionPressedAlone = true
+                keyPressedDuringModifier = false
+            } else {
+                optionPressedAlone = false
+            }
+        }
+        // Released: Toggle if was pressed alone and no key was pressed during hold
+        if !optionDown && optionWasDown {
+            if optionPressedAlone && !keyPressedDuringModifier && !hasOtherModifiers {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.viewModel.toggleEngine()
+                    
+                }
+            }
+            optionPressedAlone = false
+        }
+        // Cancel if other modifiers are added while holding
+        if optionDown && hasOtherModifiers {
+            optionPressedAlone = false
         }
 
         // Update last state
@@ -201,10 +290,6 @@ class TempOffToolbarController {
 
     // MARK: - Positioning
 
-    private let logSource = "TempOffToolbar"
-    /// Only log positioning when explicitly showing (not during periodic updates)
-    private var shouldLogPositioning = false
-
     private func positionNearCursor() {
         guard let panel = panel else { return }
 
@@ -212,14 +297,10 @@ class TempOffToolbarController {
         if let cursorRect = getCursorRectFromAccessibility() {
             positionPanel(panel, relativeTo: cursorRect, isCursorRect: true)
         } else {
-            // Fallback: position near mouse cursor
-            let mouseLocation = NSEvent.mouseLocation
+            // Fallback: position near saved mouse position
+            let mouseLocation = savedMousePosition ?? NSEvent.mouseLocation
+
             let mouseRect = NSRect(x: mouseLocation.x, y: mouseLocation.y, width: 1, height: 20)
-
-            if shouldLogPositioning {
-                logDebug("Fallback to mouse location: \(mouseLocation)", source: logSource)
-            }
-
             positionPanel(panel, relativeTo: mouseRect, isCursorRect: false)
         }
     }
@@ -257,12 +338,6 @@ class TempOffToolbarController {
             })
         }
 
-        if shouldLogPositioning {
-            logDebug("Target rect: \(targetRect)", source: logSource)
-            logDebug("Target point: \(targetPoint)", source: logSource)
-            logDebug("Containing screen: \(containingScreen?.frame ?? .zero)", source: logSource)
-        }
-
         if let screen = containingScreen ?? NSScreen.main {
             let screenFrame = screen.visibleFrame
 
@@ -278,10 +353,6 @@ class TempOffToolbarController {
             if y < screenFrame.minY {
                 y = screenFrame.minY + 10
             }
-        }
-
-        if shouldLogPositioning {
-            logDebug("Final panel position: (\(x), \(y))", source: logSource)
         }
 
         panel.setFrameOrigin(NSPoint(x: x, y: y))
@@ -305,22 +376,10 @@ class TempOffToolbarController {
         var focusedRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
               let focusedElement = focusedRef else {
-            if shouldLogPositioning {
-                logDebug("Cannot get focused element", source: logSource)
-            }
             return nil
         }
 
         let axElement = focusedElement as! AXUIElement
-
-        // Log element role for debugging
-        if shouldLogPositioning {
-            var roleRef: CFTypeRef?
-            if AXUIElementCopyAttributeValue(axElement, kAXRoleAttribute as CFString, &roleRef) == .success,
-               let role = roleRef as? String {
-                logDebug("Focused element role: \(role)", source: logSource)
-            }
-        }
 
         // Try Method 1: Get cursor position via AXBoundsForRange (works in most apps)
         if let cursorRect = getCursorBoundsViaRange(axElement) {
@@ -333,21 +392,7 @@ class TempOffToolbarController {
             return insertionRect
         }
 
-        // Fallback Method 3: Get the text field's position and size
-        // Use just the top-left corner area for positioning
-        if let fieldRect = getElementBounds(axElement) {
-            if shouldLogPositioning {
-                logDebug("Using element bounds fallback: \(fieldRect)", source: logSource)
-            }
-            // Return a small rect at the beginning of the field
-            return NSRect(
-                x: fieldRect.origin.x,
-                y: fieldRect.origin.y + fieldRect.height - 20,  // Near top in Cocoa coords
-                width: 2,
-                height: 20
-            )
-        }
-
+        // Fallback: Return nil to use mouse position
         return nil
     }
 
@@ -376,15 +421,8 @@ class TempOffToolbarController {
             return nil
         }
 
-        if shouldLogPositioning {
-            logDebug("Got visible range bounds (AX): \(axBounds)", source: logSource)
-        }
-
         // Validate bounds - some apps return invalid bounds (width=0, height=0)
         if axBounds.width == 0 && axBounds.height == 0 {
-            if shouldLogPositioning {
-                logDebug("⚠️ Invalid visible range bounds (0x0), will fallback", source: logSource)
-            }
             return nil
         }
 
@@ -400,16 +438,25 @@ class TempOffToolbarController {
               let rangeValue = rangeRef else {
             return nil
         }
+        
+        // Extract CFRange to check position
+        var selectedRange = CFRange(location: 0, length: 0)
+        _ = AXValueGetValue(rangeValue as! AXValue, .cfRange, &selectedRange)
 
         // Get bounds for the cursor position
         var boundsRef: CFTypeRef?
-        guard AXUIElementCopyParameterizedAttributeValue(
+        let boundsResult = AXUIElementCopyParameterizedAttributeValue(
             element,
             kAXBoundsForRangeParameterizedAttribute as CFString,
             rangeValue,
             &boundsRef
-        ) == .success,
-              let boundsValue = boundsRef else {
+        )
+        
+        if boundsResult != .success {
+            return nil
+        }
+        
+        guard let boundsValue = boundsRef else {
             return nil
         }
 
@@ -419,141 +466,57 @@ class TempOffToolbarController {
             return nil
         }
 
-        if shouldLogPositioning {
-            logDebug("AX cursor bounds (raw): \(axBounds)", source: logSource)
-        }
-
-        // Validate bounds - some apps return invalid bounds (width=0, height=0)
-        // or position at edge of screen (e.g., Y = screen height exactly)
+        // Validate bounds - check if both width AND height are 0
+        // This indicates invalid/missing cursor position data
         if axBounds.width == 0 && axBounds.height == 0 {
-            if shouldLogPositioning {
-                logDebug("⚠️ Invalid bounds (0x0), will fallback", source: logSource)
-            }
             return nil
         }
         
-        // If height is 0 but we have a valid X position, assume default line height
+        // If height is 0 but we have valid position, assume default line height
         if axBounds.height == 0 {
             axBounds.size.height = 18 // Default line height
         }
 
         let result = convertAXToCocoaCoordinates(axBounds)
-
-        if shouldLogPositioning, let r = result {
-            logDebug("Converted to Cocoa: \(r)", source: logSource)
+        
+        guard let convertedRect = result else {
+            return nil
         }
 
-        return result
+        // Validate: Check if the converted rect falls within any screen
+        // This catches coordinate conversion errors on multi-monitor setups
+        let centerPoint = NSPoint(x: convertedRect.midX, y: convertedRect.midY)
+        var isOnAnyScreen = false
+        for screen in NSScreen.screens {
+            // Allow some tolerance for cursors at screen edges
+            let expandedFrame = screen.frame.insetBy(dx: -100, dy: -100)
+            if expandedFrame.contains(centerPoint) {
+                isOnAnyScreen = true
+                break
+            }
+        }
+        
+        if !isOnAnyScreen {
+            return nil
+        }
+
+        return convertedRect
     }
 
-
-    /// Get element bounds using AXPosition and AXSize attributes
-    private func getElementBounds(_ element: AXUIElement) -> NSRect? {
-        // Get position
-        var positionRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &positionRef) == .success,
-              let positionValue = positionRef else {
-            return nil
-        }
-
-        var position = CGPoint.zero
-        guard AXValueGetValue(positionValue as! AXValue, .cgPoint, &position) else {
-            return nil
-        }
-
-        // Get size
-        var sizeRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &sizeRef) == .success,
-              let sizeValue = sizeRef else {
-            return nil
-        }
-
-        var size = CGSize.zero
-        guard AXValueGetValue(sizeValue as! AXValue, .cgSize, &size) else {
-            return nil
-        }
-
-        let axBounds = CGRect(origin: position, size: size)
-        return convertAXToCocoaCoordinates(axBounds)
-    }
 
     /// Convert AX coordinates (top-left origin) to Cocoa coordinates (bottom-left origin)
-    /// Works correctly on multi-monitor setups
     private func convertAXToCocoaCoordinates(_ axRect: CGRect) -> NSRect? {
-        // macOS coordinate systems:
-        // - AX/CG/Quartz: Origin at TOP-LEFT of primary screen, Y increases DOWNWARD
-        // - Cocoa/AppKit: Origin at BOTTOM-LEFT of primary screen, Y increases UPWARD
-        //
-        // For multi-monitor setups:
-        // - Primary screen (NSScreen.screens[0]) always has frame.origin = (0, 0) in Cocoa
-        // - Secondary screens below primary have NEGATIVE Y in Cocoa
-        // - Secondary screens above primary have POSITIVE Y in Cocoa
-        //
-        // The key insight: We need to find the GLOBAL coordinate space that encompasses
-        // all screens, then flip Y within that space.
-        
         guard let primaryScreen = NSScreen.screens.first else {
             return nil
         }
-        
-        // Method: Use primary screen height as the pivot point for Y-axis flipping
-        // This works because:
-        // - AX Y=0 is at TOP of primary screen
-        // - Cocoa Y=0 is at BOTTOM of primary screen
-        // - Both share the same X coordinates
-        // - Both extend into negative/positive Y for screens below/above primary
-        //
-        // Formula: cocoa_y = primaryHeight - ax_y - rect_height
-        // This formula works for ALL screens because:
-        // - For primary screen: ax_y is 0..primaryHeight, result is 0..primaryHeight ✓
-        // - For screen below primary: ax_y > primaryHeight, result is negative Y ✓
-        // - For screen above primary: ax_y < 0, result > primaryHeight ✓
+
+        // Flip Y axis using primary screen height as pivot
         
         let primaryHeight = primaryScreen.frame.height
         let cocoaY = primaryHeight - axRect.origin.y - axRect.height
         
         // X coordinate stays the same (both systems use same X axis)
         let cocoaX = axRect.origin.x
-
-        if shouldLogPositioning {
-            logDebug("=== Coordinate Conversion ===", source: logSource)
-            logDebug("Input AX rect: \(axRect)", source: logSource)
-            logDebug("Primary screen height: \(primaryHeight)", source: logSource)
-            
-            // Log all screens for debugging multi-monitor issues
-            for (i, screen) in NSScreen.screens.enumerated() {
-                let isPrimary = (i == 0 ? " (PRIMARY)" : "")
-                logDebug("  Screen \(i)\(isPrimary): frame=\(screen.frame)", source: logSource)
-            }
-            
-            logDebug("Calculated Cocoa position: (\(cocoaX), \(cocoaY))", source: logSource)
-            
-            // Validate: check if the result falls within any screen
-            let resultPoint = NSPoint(x: cocoaX + axRect.width/2, y: cocoaY + axRect.height/2)
-            var foundScreen: NSScreen? = nil
-            for screen in NSScreen.screens {
-                if screen.frame.contains(resultPoint) {
-                    foundScreen = screen
-                    break
-                }
-            }
-            
-            if let screen = foundScreen {
-                logDebug("Result is on screen: \(screen.frame)", source: logSource)
-            } else {
-                // If result doesn't fall on any screen, log a warning
-                logDebug("⚠️ Result point \(resultPoint) is NOT on any screen!", source: logSource)
-                
-                // Fallback: find nearest screen and clamp to it
-                if let nearestScreen = NSScreen.screens.min(by: { screen1, screen2 in
-                    let dist1 = distanceToScreen(point: resultPoint, screen: screen1)
-                    let dist2 = distanceToScreen(point: resultPoint, screen: screen2)
-                    return dist1 < dist2
-                }) {
-                    logDebug("Nearest screen: \(nearestScreen.frame)", source: logSource)
-                }
-            }
-        }
 
         return NSRect(
             x: cocoaX,

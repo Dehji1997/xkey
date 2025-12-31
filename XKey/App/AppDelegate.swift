@@ -852,6 +852,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             // Log detailed input detection info (only when verbose logging is on - handled inside function)
             self?.logMouseClickInputDetection()
+            
+            // Reset lastFocusedElement to allow toolbar to re-show after auto-hide
+            // When user clicks, they might be moving cursor within same field
+            self?.lastFocusedElement = nil
+            
+            // Trigger toolbar check with slight delay to allow focus to settle
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self?.checkAndShowToolbarForFocusedElement()
+            }
         }
         
         // Local monitor - catches clicks within XKey app itself (Debug window, Settings, etc.)
@@ -1146,14 +1155,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Temp Off Toolbar
 
     private func setupTempOffToolbar() {
+        // Always setup notification observer for settings changes
+        setupTempOffToolbarSettingsObserver()
+
         let preferences = SharedSettings.shared.loadPreferences()
 
-        // Only setup if toolbar is enabled
+        // Only setup toolbar if enabled
         guard preferences.tempOffToolbarEnabled else {
             debugWindowController?.logEvent("  ⏹️ Temp off toolbar disabled")
             return
         }
 
+        enableTempOffToolbar()
+    }
+
+    /// Setup observer for toolbar settings changes
+    private func setupTempOffToolbarSettingsObserver() {
+        NotificationCenter.default.addObserver(
+            forName: .tempOffToolbarSettingsDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleTempOffToolbarSettingsChange()
+        }
+        debugWindowController?.logEvent("  ✅ Temp off toolbar settings observer registered")
+    }
+
+    /// Handle toolbar settings changes (enable/disable or hotkey change)
+    private func handleTempOffToolbarSettingsChange() {
+        let preferences = SharedSettings.shared.loadPreferences()
+
+        if preferences.tempOffToolbarEnabled {
+            debugWindowController?.logEvent("🔧 Temp off toolbar settings changed - enabling")
+            enableTempOffToolbar()
+        } else {
+            debugWindowController?.logEvent("🔧 Temp off toolbar settings changed - disabling")
+            disableTempOffToolbar()
+        }
+    }
+
+    /// Enable temp off toolbar and setup all related features
+    private func enableTempOffToolbar() {
         // Setup toolbar state change callback
         TempOffToolbarController.shared.onStateChange = { [weak self] spellingOff, engineOff in
             guard let self = self else { return }
@@ -1165,13 +1207,41 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.debugWindowController?.logEvent("🔧 Toolbar state changed: spelling=\(spellingOff ? "OFF" : "ON"), engine=\(engineOff ? "OFF" : "ON")")
         }
 
-        // Setup hotkey: Cmd+Option+T to toggle toolbar
+        // Setup hotkey from preferences
         setupTempOffToolbarHotkey()
 
         // Setup focus change monitoring to auto-show toolbar
         setupFocusChangeMonitoring()
 
-        debugWindowController?.logEvent("  ✅ Temp off toolbar initialized")
+        debugWindowController?.logEvent("  ✅ Temp off toolbar enabled")
+        
+        // Check if user is already focused on a text input and show toolbar immediately
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            self?.lastFocusedElement = nil  // Reset to force re-check
+            self?.checkAndShowToolbarForFocusedElement()
+        }
+    }
+
+    /// Disable temp off toolbar and cleanup
+    private func disableTempOffToolbar() {
+        // Clear hotkey from EventTapManager
+        eventTapManager?.toolbarHotkey = nil
+        eventTapManager?.onToolbarHotkey = nil
+
+        // Stop focus check timer
+        focusCheckTimer?.invalidate()
+        focusCheckTimer = nil
+
+        // Hide toolbar if visible
+        TempOffToolbarController.shared.hide()
+
+        // Clear callback
+        TempOffToolbarController.shared.onStateChange = nil
+        
+        // Clear last focused element so re-enable will re-check
+        lastFocusedElement = nil
+
+        debugWindowController?.logEvent("  ⏹️ Temp off toolbar disabled")
     }
 
     /// Setup monitoring for focus changes to auto-show toolbar when focusing text fields
@@ -1225,10 +1295,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Check if it's the same element as before
         if let lastElement = lastFocusedElement, CFEqual(lastElement, axElement) {
-            // Same element, just update position if visible
+            // Same element
             if TempOffToolbarController.shared.isVisible {
+                // Toolbar visible - just update position
                 TempOffToolbarController.shared.updatePosition()
             }
+            // If toolbar is hidden (after auto-hide), we'll re-show when mouse click triggers
+            // The mouse click handler will reset lastFocusedElement
             return
         }
 
@@ -1294,50 +1367,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupTempOffToolbarHotkey() {
-        // Remove existing monitors
-        if let monitor = tempOffToolbarHotkeyMonitor {
-            NSEvent.removeMonitor(monitor)
-            tempOffToolbarHotkeyMonitor = nil
-        }
-        if let monitor = tempOffToolbarGlobalHotkeyMonitor {
-            NSEvent.removeMonitor(monitor)
-            tempOffToolbarGlobalHotkeyMonitor = nil
-        }
+        // Get hotkey from preferences
+        let preferences = SharedSettings.shared.loadPreferences()
+        let hotkey = preferences.tempOffToolbarHotkey
 
-        // Hotkey: Cmd+Option+T to toggle toolbar
-        let keyCode: UInt16 = 0x11 // T key
-
-        // Helper to check modifiers (Cmd+Option only)
-        let checkModifiers: (NSEvent) -> Bool = { event in
-            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            let significantFlags = NSEvent.ModifierFlags([.command, .control, .option, .shift])
-            let actualFlags = flags.intersection(significantFlags)
-            return actualFlags == [.command, .option]
+        // If no keycode, disable hotkey
+        guard hotkey.keyCode != 0 else {
+            eventTapManager?.toolbarHotkey = nil
+            eventTapManager?.onToolbarHotkey = nil
+            debugWindowController?.logEvent("  ⏹️ Temp off toolbar hotkey disabled (no key set)")
+            return
         }
 
-        // Global monitor
-        tempOffToolbarGlobalHotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == keyCode && checkModifiers(event) {
-                DispatchQueue.main.async {
-                    TempOffToolbarController.shared.toggle()
-                    self?.debugWindowController?.logEvent("🔧 Temp off toolbar toggled via hotkey (Cmd+Option+T)")
-                }
-            }
+        // Configure EventTapManager to handle toolbar hotkey
+        // This ensures the hotkey is consumed at the lowest level
+        eventTapManager?.toolbarHotkey = hotkey
+        eventTapManager?.onToolbarHotkey = { [weak self] in
+            TempOffToolbarController.shared.toggle()
+            self?.debugWindowController?.logEvent("🔧 Temp off toolbar toggled via hotkey (\(hotkey.displayString))")
         }
 
-        // Local monitor
-        tempOffToolbarHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == keyCode && checkModifiers(event) {
-                DispatchQueue.main.async {
-                    TempOffToolbarController.shared.toggle()
-                    self?.debugWindowController?.logEvent("🔧 Temp off toolbar toggled via hotkey (Cmd+Option+T)")
-                }
-                return nil // Consume event
-            }
-            return event
-        }
-
-        debugWindowController?.logEvent("  ✅ Temp off toolbar hotkey: Cmd+Option+T")
+        debugWindowController?.logEvent("  ✅ Temp off toolbar hotkey: \(hotkey.displayString) (via EventTap)")
     }
 
     /// Show temp off toolbar programmatically

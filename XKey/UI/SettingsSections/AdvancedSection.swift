@@ -170,29 +170,44 @@ struct AdvancedSection: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
 
-                            // Info box with usage instructions
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "keyboard")
-                                        .foregroundColor(.blue)
-                                    Text("Phím tắt: ⌘⌥T")
-                                        .font(.caption)
-                                        .fontWeight(.medium)
-                                }
+                            // Sub-options (only visible when toolbar is enabled)
+                            if viewModel.preferences.tempOffToolbarEnabled {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    // Custom hotkey setting
+                                    HStack {
+                                        Text("Phím tắt hiện/ẩn:")
+                                            .font(.caption)
+                                        Spacer()
+                                        HotkeyRecorderView(hotkey: $viewModel.preferences.tempOffToolbarHotkey, minimumModifiers: 2)
+                                            .frame(width: 150)
+                                    }
+                                    .padding(.top, 4)
 
-                                Text("• Nhấn ⌘⌥T để hiện/ẩn thanh công cụ tại con trỏ")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                Text("• Bấm vào nút trên thanh công cụ để bật/tắt tính năng")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                Text("• Bấm phím tắt Ctrl/Option để bật/tắt tính năng")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
+                                    // Info box with usage instructions
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "keyboard")
+                                                .foregroundColor(.blue)
+                                            Text("Phím tắt: \(viewModel.preferences.tempOffToolbarHotkey.displayString)")
+                                                .font(.caption)
+                                                .fontWeight(.medium)
+                                        }
+
+                                        Text("• Nhấn \(viewModel.preferences.tempOffToolbarHotkey.displayString) để hiện/ẩn thanh công cụ tại con trỏ")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                        Text("• Bấm vào nút trên thanh công cụ để bật/tắt tính năng")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                        Text("• Bấm phím tắt Ctrl/Option để bật/tắt tính năng")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(10)
+                                    .background(Color.blue.opacity(0.05))
+                                    .cornerRadius(8)
+                                }
                             }
-                            .padding(10)
-                            .background(Color.blue.opacity(0.05))
-                            .cornerRadius(8)
                         }
                     }
                 }

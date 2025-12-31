@@ -39,6 +39,8 @@ enum SharedSettingsKey: String {
     case allowConsonantZFWJ = "XKey.allowConsonantZFWJ"
     case freeMarkEnabled = "XKey.freeMarkEnabled"
     case tempOffToolbarEnabled = "XKey.tempOffToolbarEnabled"
+    case tempOffToolbarHotkeyCode = "XKey.tempOffToolbarHotkeyCode"
+    case tempOffToolbarHotkeyModifiers = "XKey.tempOffToolbarHotkeyModifiers"
 
     // Macro settings
     case macroEnabled = "XKey.macroEnabled"
@@ -349,7 +351,35 @@ class SharedSettings {
 
     var tempOffToolbarEnabled: Bool {
         get { readBool(forKey: SharedSettingsKey.tempOffToolbarEnabled.rawValue) }
-        set { writeBool(newValue, forKey: SharedSettingsKey.tempOffToolbarEnabled.rawValue) }
+        set {
+            writeBool(newValue, forKey: SharedSettingsKey.tempOffToolbarEnabled.rawValue)
+            notifyToolbarChanged()
+        }
+    }
+
+    var tempOffToolbarHotkeyCode: UInt16 {
+        get { UInt16(readInt(forKey: SharedSettingsKey.tempOffToolbarHotkeyCode.rawValue)) }
+        set {
+            writeInt(Int(newValue), forKey: SharedSettingsKey.tempOffToolbarHotkeyCode.rawValue)
+            notifyToolbarChanged()
+        }
+    }
+
+    var tempOffToolbarHotkeyModifiers: UInt {
+        get { UInt(readInt(forKey: SharedSettingsKey.tempOffToolbarHotkeyModifiers.rawValue)) }
+        set {
+            writeInt(Int(newValue), forKey: SharedSettingsKey.tempOffToolbarHotkeyModifiers.rawValue)
+            notifyToolbarChanged()
+        }
+    }
+
+    /// Notify that toolbar settings have changed
+    private func notifyToolbarChanged() {
+        guard !isBatchUpdating else { return }
+        NotificationCenter.default.post(
+            name: .tempOffToolbarSettingsDidChange,
+            object: nil
+        )
     }
 
     // MARK: - Macro Settings
@@ -701,6 +731,16 @@ class SharedSettings {
         prefs.freeMarkEnabled = freeMarkEnabled
         prefs.tempOffToolbarEnabled = tempOffToolbarEnabled
 
+        // Temp off toolbar hotkey
+        let toolbarHotkeyCode = tempOffToolbarHotkeyCode
+        let toolbarHotkeyModifiers = tempOffToolbarHotkeyModifiers
+        if toolbarHotkeyCode != 0 || toolbarHotkeyModifiers != 0 {
+            prefs.tempOffToolbarHotkey = Hotkey(
+                keyCode: toolbarHotkeyCode,
+                modifiers: ModifierFlags(rawValue: toolbarHotkeyModifiers)
+            )
+        }
+
         // Macro settings
         prefs.macroEnabled = macroEnabled
         prefs.macroInEnglishMode = macroInEnglishMode
@@ -778,6 +818,8 @@ class SharedSettings {
         allowConsonantZFWJ = prefs.allowConsonantZFWJ
         freeMarkEnabled = prefs.freeMarkEnabled
         tempOffToolbarEnabled = prefs.tempOffToolbarEnabled
+        tempOffToolbarHotkeyCode = prefs.tempOffToolbarHotkey.keyCode
+        tempOffToolbarHotkeyModifiers = prefs.tempOffToolbarHotkey.modifiers.rawValue
 
         // Macro settings
         macroEnabled = prefs.macroEnabled
@@ -822,6 +864,9 @@ class SharedSettings {
 
         // Send ONE notification to notify observers
         notifySettingsChanged()
+        
+        // Also notify toolbar settings changed (so toolbar can be enabled/disabled immediately)
+        notifyToolbarChanged()
     }
 }
 
@@ -833,4 +878,7 @@ extension Notification.Name {
     
     /// Posted when settings change (distributed, cross-app)
     static let xkeySettingsDidChange = Notification.Name("XKey.settingsDidChange")
+    
+    /// Posted when temp off toolbar settings change (enabled/disabled or hotkey)
+    static let tempOffToolbarSettingsDidChange = Notification.Name("XKey.tempOffToolbarSettingsDidChange")
 }

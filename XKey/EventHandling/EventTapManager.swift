@@ -16,6 +16,7 @@ class EventTapManager {
     private var runLoopSource: CFRunLoopSource?
     private var isEnabled = false
     private var isSuspended = false  // Track suspension state for IMKit mode
+    private var isHotkeyRecording = false  // Track if hotkey recording is in progress
 
     weak var delegate: EventTapDelegate?
     var debugLogCallback: ((String) -> Void)?
@@ -23,6 +24,10 @@ class EventTapManager {
     // Toggle hotkey configuration
     var toggleHotkey: Hotkey?
     var onToggleHotkey: (() -> Void)?
+    
+    // Toolbar hotkey configuration (for temp off toolbar)
+    var toolbarHotkey: Hotkey?
+    var onToolbarHotkey: (() -> Void)?
     
     // Note: Undo typing key is handled by KeyboardEventHandler directly
     // because it needs to check engine state before deciding to consume the key
@@ -54,9 +59,22 @@ class EventTapManager {
     
     // MARK: - Initialization
     
-    init() {}
+    init() {
+        // Observe hotkey recording state to suspend hotkey processing
+        NotificationCenter.default.addObserver(
+            forName: .hotkeyRecordingStateChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if let isRecording = notification.userInfo?["isRecording"] as? Bool {
+                self?.isHotkeyRecording = isRecording
+                self?.debugLogCallback?("🎹 Hotkey recording: \(isRecording ? "STARTED" : "STOPPED")")
+            }
+        }
+    }
     
     deinit {
+        NotificationCenter.default.removeObserver(self)
         stop()
     }
     
@@ -303,6 +321,21 @@ class EventTapManager {
                         return nil
                     }
                 }
+            }
+        }
+        
+        // Check for toolbar hotkey (for temp off toolbar)
+        // Skip if user is recording a new hotkey (so they can re-record the same hotkey)
+        if let hotkey = toolbarHotkey, type == .keyDown, !isHotkeyRecording {
+            let eventModifiers = ModifierFlags(from: event.flags)
+            if event.keyCode == hotkey.keyCode && eventModifiers == hotkey.modifiers {
+                debugLogCallback?("  → TOOLBAR HOTKEY DETECTED - consuming event")
+                // Call toolbar callback on main thread
+                DispatchQueue.main.async { [weak self] in
+                    self?.onToolbarHotkey?()
+                }
+                // Consume the event completely - don't pass to other apps
+                return nil
             }
         }
         
